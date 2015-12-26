@@ -11,18 +11,19 @@
 ;; ======================================================================
 ;; Squares
 
-(let [c (atom 0)]
-  (defn inc-id []
-    (let [out @c]
-      (swap! c inc)
-      out)))
+(def c (atom 0))
+
+(defn inc-id []
+  (let [out @c]
+    (swap! c inc)
+    out))
 
 (defn rand-rgb []
   [(rand-int 255) (rand-int 255) (rand-int 255)])
 
 ;; TODO: take x as arg to decouple from grid-size
 (defn rand-square []
-  (let [side 20]
+  (let [side 40]
     {:id (inc-id) :rgb (rand-rgb) :side side
      :y 0 :x (rand-int (- (first grid-size) side))}))
 
@@ -127,10 +128,15 @@
 
 (def done? (atom false))
 
+(enable-console-print!)
+
+(comment
+  (println (sort-by first (support-pairs (group-by sq->top (vals sqs))))))
+
 (defn draw []
   (when-not @done?
     (clear-canvas!)
-    (let [sqs (idx-squares (stacked-squares 100))]
+    (let [sqs (idx-squares (stacked-squares 50))]
       (doseq [sq (vals sqs)]
         (square! sq)))
     (reset! done? true)))
@@ -150,7 +156,7 @@
   (reify
     om/IRender
     (render [this]
-      (dom/h1 nil "asd"))))
+      (dom/div nil ""))))
 
 (defn init []
   (om/root widget {:text "Hello world!"}
