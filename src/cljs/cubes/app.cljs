@@ -126,6 +126,19 @@
     (q/rect x y side side)
     (sq-text! sq')))
 
+(defn claw!
+  "Draws a claw at x up to y"
+  [x y]
+  (q/fill 0 0 0)
+  (q/rect (- x 10) (- y 5) 25 5)
+  (q/rect x 0 5 y))
+
+(defn grip!
+  "Draws a claw to a square"
+  [sq]
+  (let [{:keys [x y side]} (xy->xy sq)]
+    (claw! (+ x (/ side 2)) y)))
+
 (def done? (atom false))
 
 (enable-console-print!)
@@ -138,7 +151,9 @@
     (clear-canvas!)
     (let [sqs (idx-squares (stacked-squares 50))]
       (doseq [sq (vals sqs)]
-        (square! sq)))
+        (square! sq))
+      (let [sq (last (sort-by :y (vals sqs)))]
+        (grip! sq)))
     (reset! done? true)))
 
 (q/defsketch example
