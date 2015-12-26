@@ -4,18 +4,28 @@
             [quil.core :as q :include-macros true]))
 
 ;; ======================================================================
+;; Constants
+
+(def grid-size [600 600])
+
+;; ======================================================================
 ;; Squares
+
+;; TODO: use another rand fn to avoid q/
 
 (defn rand-rgb []
   [(q/random 255) (q/random 255) (q/random 255)])
 
-(defn rand-square [_]
-  {:rgb (rand-rgb) :side 20 :x (q/random 580) :y 0})
+;; TODO: take x as arg to decouple from grid-size
+(defn rand-square []
+  (let [side 20]
+    {:id (gensym) :rgb (rand-rgb) :side side
+     :y 0 :x (q/random (- (first grid-size) side))}))
 
 (defn overlap?
   "Checks if two integer intervals overlap"
-  [[x-min x-max] [y-min y-max]]
-  (and (<= x-min y-max) (<= y-min x-max)))
+  [[a-min a-max] [b-min b-max]]
+  (and (< a-min b-max) (< b-min a-max)))
 
 (defn sq->interval
   "Gets the x interval the square occupies on the screen"
@@ -46,18 +56,20 @@
   [squares sq]
   (conj squares (assoc sq :y (posible-y squares sq))))
 
-(defn stacked-squares [n]
-  (loop [sqs (map rand-square (range n))
+(defn stacked-squares
+  "Generate n stacked-squares"
+  [n]
+  (loop [sqs (map (fn [_] (rand-square)) (range n))
          stack []]
     (if (seq sqs)
       (recur (rest sqs) (stack-sq stack (first sqs)))
       stack)))
 
-
-;; ======================================================================
-;; Constants
-
-(def grid-size [600 600])
+(defn on-top?
+  "Is a on top of b?"
+  [a b]
+  (and (sq-overlap? a b)
+       (= (:y a) (sq->top b))))
 
 ;; ======================================================================
 ;; Quil
@@ -87,7 +99,7 @@
 (defn draw []
   (when-not @done?
     (clear-canvas!)
-    (doseq [sq (stacked-squares 200)]
+    (doseq [sq (stacked-squares 100)]
       (square! sq))
     (reset! done? true)))
 
