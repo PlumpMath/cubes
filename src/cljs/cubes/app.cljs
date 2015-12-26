@@ -46,6 +46,10 @@
   [{:keys [y side]}]
   (+ y side))
 
+(defn sq->center
+  [{:keys [x y side]}]
+  [(+ x (/ side 4)) (+ y (/ side 1.5))])
+
 (defn posible-y
   "Returns y position for sq to be stacked on top of squares"
   [squares sq]
@@ -107,23 +111,29 @@
 (defn xy->xy [sq]
   (update sq :y #(- (first grid-size) (:side sq) %)))
 
+(defn sq-text! [sq]
+  (q/stroke 0 0 0)
+  (q/fill 0 0 0)
+  (let [[x y] (sq->center sq)]
+    (q/text (:id sq) x y)))
+
 (defn square!
   "Draws a square in the screen"
   [sq]
-  (let [{:keys [rgb x y]} (xy->xy sq)]
+  (let [{:keys [rgb x y side] :as sq'} (xy->xy sq)]
     (apply q/fill rgb)
-    (let [s (:side sq)]
-      (q/rect x y s s))))
+    (q/rect x y side side)
+    (sq-text! sq')))
 
-(defonce done? (atom false))
+(def done? (atom false))
 
 (defn draw []
   (when-not @done?
     (clear-canvas!)
     (let [sqs (idx-squares (stacked-squares 100))]
       (doseq [sq (vals sqs)]
-        (square! sq))
-      (reset! done? true))))
+        (square! sq)))
+    (reset! done? true)))
 
 (q/defsketch example
   :title "Oh so many grey circles"
