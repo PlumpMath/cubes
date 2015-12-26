@@ -115,7 +115,7 @@
     (let [s (:side sq)]
       (q/rect x y s s))))
 
-(def done? (atom false))
+(defonce done? (atom false))
 
 (defn draw []
   (when-not @done?
