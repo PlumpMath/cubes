@@ -11,16 +11,20 @@
 ;; ======================================================================
 ;; Squares
 
-;; TODO: use another rand fn to avoid q/
+(let [c (atom 0)]
+  (defn inc-id []
+    (let [out @c]
+      (swap! c inc)
+      out)))
 
 (defn rand-rgb []
-  [(q/random 255) (q/random 255) (q/random 255)])
+  [(rand-int 255) (rand-int 255) (rand-int 255)])
 
 ;; TODO: take x as arg to decouple from grid-size
 (defn rand-square []
   (let [side 20]
-    {:id (gensym) :rgb (rand-rgb) :side side
-     :y 0 :x (q/random (- (first grid-size) side))}))
+    {:id (inc-id) :rgb (rand-rgb) :side side
+     :y 0 :x (rand-int (- (first grid-size) side))}))
 
 (defn overlap?
   "Checks if two integer intervals overlap"
@@ -65,11 +69,28 @@
       (recur (rest sqs) (stack-sq stack (first sqs)))
       stack)))
 
+(defn idx-squares [sqs]
+  (zipmap (map :id sqs) sqs))
+
 (defn on-top?
   "Is a on top of b?"
   [a b]
   (and (sq-overlap? a b)
        (= (:y a) (sq->top b))))
+
+(defn supported-by
+  "Returns all the squares that support sq, where y-sqs is indexed by sq->top"
+  [y-sqs sq]
+  (some->> (get y-sqs (:y sq))
+           (filter #(and (not= sq %) (on-top? sq %)))))
+
+(defn support-pairs
+  "Returns all the support pairs in the indexed stacked-squares"
+  [y-sqs]
+  (->> (vals y-sqs)
+       (mapcat identity)
+       (mapcat (fn [sq]
+                 (map #(vector (:id sq) (:id %)) (supported-by y-sqs sq))))))
 
 ;; ======================================================================
 ;; Quil
@@ -99,9 +120,10 @@
 (defn draw []
   (when-not @done?
     (clear-canvas!)
-    (doseq [sq (stacked-squares 100)]
-      (square! sq))
-    (reset! done? true)))
+    (let [sqs (idx-squares (stacked-squares 100))]
+      (doseq [sq (vals sqs)]
+        (square! sq))
+      (reset! done? true))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
