@@ -47,6 +47,19 @@
   [{:keys [y side]}]
   (+ y side))
 
+(enable-console-print!)
+
+(defn path
+  "Returns a function that interpolates between pairs"
+  [[ax ay] [bx by]]
+  (fn [s]
+    (letfn [(l [a b]
+              (+ (* s (- b a)) a))]
+      [(l ax bx) (l ay by)])))
+
+(defn path-to [{:keys [x y]} target-sq]
+  (path [x y] [(:x target-sq) (sq->top target-sq)]))
+
 (defn sq->center
   [{:keys [x y side]}]
   [(+ x (/ side 4)) (+ y (/ side 1.5))])
@@ -104,11 +117,6 @@
   (q/fill 192 192 192)
   (apply q/rect 0 0 grid-size))
 
-(defn setup []
-  (q/frame-rate 1)
-  (q/color-mode :rgb)
-  (q/background 200))
-
 (defn xy->xy [sq]
   (update sq :y #(- (first grid-size) (:side sq) %)))
 
@@ -139,22 +147,30 @@
   (let [{:keys [x y side]} (xy->xy sq)]
     (claw! (+ x (/ side 2)) y)))
 
-(def done? (atom false))
-
-(enable-console-print!)
+(defonce app-state
+  (atom {:squares {}
+         :frame 0}))
 
 (comment
   (println (sort-by first (support-pairs (group-by sq->top (vals sqs))))))
 
+(defn setup []
+  (q/frame-rate 20)
+  (q/color-mode :rgb)
+  (q/background 200)
+  (swap! app-state assoc :squares (sort-by :y (stacked-squares 50))))
+
 (defn draw []
-  (when-not @done?
-    (clear-canvas!)
-    (let [sqs (idx-squares (stacked-squares 50))]
-      (doseq [sq (vals sqs)]
-        (square! sq))
-      (let [sq (last (sort-by :y (vals sqs)))]
-        (grip! sq)))
-    (reset! done? true)))
+  (clear-canvas!)
+  (let [sqs (:squares @app-state)]
+    (doseq [sq (drop-last 1 sqs)]
+      (square! sq))
+    (let [[target-sq sq] (take-last 2 sqs)
+          [x y] ((path-to sq target-sq) (:frame @app-state))
+          sq' (assoc sq :x x :y y)]
+      (square! sq')
+      (grip! sq')
+      (swap! app-state update :frame #(if (> 1 %) (+ % (/ 1 20)) %)))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
