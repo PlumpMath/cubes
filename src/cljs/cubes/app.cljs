@@ -49,16 +49,41 @@
 
 (enable-console-print!)
 
-(defn path
-  "Returns a function that interpolates between pairs"
-  [[ax ay] [bx by]]
-  (fn [s]
-    (letfn [(l [a b]
-              (+ (* s (- b a)) a))]
-      [(l ax bx) (l ay by)])))
+(defn dist [a b]
+  (letfn [(d [k]
+            (Math/pow (- (get a k) (get b k)) 2))]
+    (Math/sqrt (+ (d :x) (d :y)))))
 
-(defn path-to [{:keys [x y]} target-sq]
-  (path [x y] [(:x target-sq) (sq->top target-sq)]))
+;; http://clj-me.blogspot.com.uy/2009/06/linear-interpolation-and-sorted-map.html
+(defn interpolator
+ "Takes a coll of 2D points (vectors) and returns
+  their linear interpolation function."
+ [points]
+  (let [m (into (sorted-map) points)]
+    (fn [x]
+      (let [[[x1 y1]] (rsubseq m <= x)
+            [[x2 y2]] (subseq m > x)]
+        (if x2
+          (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1))))
+          y1)))))
+
+(defn path-through
+  "Returns a path through all the sqs"
+  [& sqs]
+  (let [d (map dist (drop 1 sqs) sqs)
+        total-d (apply + d)
+        w (map #(/ % total-d) d)
+        inc-w (reduce (fn [acc v] (conj acc (+ v (last acc)))) [0] w)]
+    (juxt (interpolator (map vector inc-w (map :x sqs)))
+          (interpolator (map vector inc-w (map :y sqs))))))
+
+(defn rect-path
+  "Returns an arc-like path to the target"
+  [sq target-sq]
+  (let [sq-i (update sq :y (partial + (:side sq)))]
+    (path-through sq sq-i
+                  (assoc sq-i :x (:x target-sq))
+                  (assoc target-sq :y (sq->top target-sq)))))
 
 (defn sq->center
   [{:keys [x y side]}]
@@ -166,11 +191,11 @@
     (doseq [sq (drop-last 1 sqs)]
       (square! sq))
     (let [[target-sq sq] (take-last 2 sqs)
-          [x y] ((path-to sq target-sq) (:frame @app-state))
+          [x y] ((rect-path sq target-sq) (:frame @app-state))
           sq' (assoc sq :x x :y y)]
       (square! sq')
       (grip! sq')
-      (swap! app-state update :frame #(if (> 1 %) (+ % (/ 1 20)) %)))))
+      (swap! app-state update :frame #(if (> 1 %) (+ % (/ 1 20)) 0)))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
