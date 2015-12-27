@@ -81,9 +81,7 @@
   "Returns an arc-like path to the target"
   [sq target-sq]
   (let [sq-i (update sq :y (partial + (:side sq)))]
-    (path-through sq sq-i
-                  (assoc sq-i :x (:x target-sq))
-                  (assoc target-sq :y (sq->top target-sq)))))
+    (path-through sq sq-i (assoc sq-i :x (:x target-sq)) target-sq)))
 
 (defn sq->center
   [{:keys [x y side]}]
@@ -174,6 +172,8 @@
 
 (defonce app-state
   (atom {:squares {}
+         :ops []
+         :n 0
          :frame 0}))
 
 (comment
@@ -183,19 +183,31 @@
   (q/frame-rate 20)
   (q/color-mode :rgb)
   (q/background 200)
-  (swap! app-state assoc :squares (sort-by :y (stacked-squares 50))))
+  (swap! app-state assoc :squares (sort-by :y (stacked-squares 50)))
+  (swap! app-state #(assoc % :ops (let [[tsq _ sq] (take-last 3 (:squares %))
+                                        tsq' (assoc sq
+                                                    :y (sq->top tsq)
+                                                    :x (:x tsq))]
+                                    [[sq tsq'] [tsq' sq]]))))
 
 (defn draw []
   (clear-canvas!)
   (let [sqs (:squares @app-state)]
     (doseq [sq (drop-last 1 sqs)]
       (square! sq))
-    (let [[target-sq sq] (take-last 2 sqs)
+    (let [[sq target-sq] (nth (:ops @app-state) (:n @app-state))
           [x y] ((rect-path sq target-sq) (:frame @app-state))
           sq' (assoc sq :x x :y y)]
       (square! sq')
-      (grip! sq')
-      (swap! app-state update :frame #(if (> 1 %) (+ % (/ 1 20)) 0)))))
+      (grip! sq'))
+    (swap! app-state
+           (fn [s]
+             (let [f (:frame s)]
+               (if (> 1 f)
+                 (assoc s :frame (+ f (/ 1 20)))
+                 (assoc s :frame 0 :n (if (< (:n s) (dec (count (:ops s))))
+                                        (inc (:n s))
+                                        0))))))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
