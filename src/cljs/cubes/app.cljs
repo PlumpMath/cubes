@@ -82,7 +82,9 @@
 (defn rect-path
   "Returns an arc-like path to the target"
   [sq target-sq]
-  (let [sq-i (update sq :y (partial + (:side sq)))]
+  (let [sq-i (if (< (:y sq) (:y target-sq))
+               (assoc sq :y (+ (:side target-sq) (:y target-sq)))
+               (update sq :y (partial + (:side sq))))]
     (path-through sq sq-i (assoc sq-i :x (:x target-sq)) target-sq)))
 
 (defn sq->center
@@ -203,7 +205,8 @@
 (defn apply-op [s {:keys [move to] :as op}]
   (let [sq (get (:squares s) move)
         target-sq (get (:squares s) to)
-        [x y] ((rect-path sq target-sq) (:frame s))
+        target-sq' (assoc target-sq :y (sq->top target-sq))
+        [x y] ((rect-path sq target-sq') (:frame s))
         sq' (assoc sq :x x :y y)]
     (cond-> (assoc s :claw sq')
       (= :move (:type op)) (assoc-in [:squares (:id sq')] sq'))))
