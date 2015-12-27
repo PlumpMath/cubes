@@ -8,6 +8,8 @@
 
 (def grid-size [600 600])
 
+(def frame-rate 20)
+
 ;; ======================================================================
 ;; Squares
 
@@ -172,6 +174,7 @@
 
 (defonce app-state
   (atom {:squares {}
+         :claw {}
          :ops []
          :n 0
          :frame 0}))
@@ -180,34 +183,47 @@
   (println (sort-by first (support-pairs (group-by sq->top (vals sqs))))))
 
 (defn setup []
-  (q/frame-rate 20)
+  (q/frame-rate frame-rate)
   (q/color-mode :rgb)
   (q/background 200)
-  (swap! app-state assoc :squares (sort-by :y (stacked-squares 50)))
-  (swap! app-state #(assoc % :ops (let [[tsq _ sq] (take-last 3 (:squares %))
-                                        tsq' (assoc sq
-                                                    :y (sq->top tsq)
-                                                    :x (:x tsq))]
-                                    [[sq tsq'] [tsq' sq]]))))
+  (swap! app-state
+         #(let [sqs (sort-by :y (stacked-squares 50))]
+            (assoc %
+                   :squares (idx-squares sqs)
+                   :ops [{:type :move :move 49 :to 48}
+                         {:type :claw :move 48 :to 1}
+                         {:type :move :move 1 :to 2}
+                         {:type :claw :move 2 :to 49}
+                         {:type :move :move 49 :to 47}
+                         {:type :claw :move 47 :to 1}
+                         {:type :move :move 1 :to 3}
+                         {:type :claw :move 3 :to 49}
+                         ]))))
+
+(defn apply-op [s {:keys [move to] :as op}]
+  (let [sq (get (:squares s) move)
+        target-sq (get (:squares s) to)
+        [x y] ((rect-path sq target-sq) (:frame s))
+        sq' (assoc sq :x x :y y)]
+    (cond-> (assoc s :claw sq')
+      (= :move (:type op)) (assoc-in [:squares (:id sq')] sq'))))
 
 (defn draw []
   (clear-canvas!)
-  (let [sqs (:squares @app-state)]
-    (doseq [sq (drop-last 1 sqs)]
+  (let [s @app-state
+        op (nth (:ops s) (:n s))
+        s' (apply-op s op)]
+    (doseq [sq (vals (:squares s'))]
       (square! sq))
-    (let [[sq target-sq] (nth (:ops @app-state) (:n @app-state))
-          [x y] ((rect-path sq target-sq) (:frame @app-state))
-          sq' (assoc sq :x x :y y)]
-      (square! sq')
-      (grip! sq'))
+    (grip! (get s' :claw))
     (swap! app-state
            (fn [s]
              (let [f (:frame s)]
                (if (> 1 f)
-                 (assoc s :frame (+ f (/ 1 20)))
-                 (assoc s :frame 0 :n (if (< (:n s) (dec (count (:ops s))))
-                                        (inc (:n s))
-                                        0))))))))
+                 (assoc s :frame (+ f (/ 1 frame-rate)))
+                 (assoc s' :frame 0 :n (if (< (:n s) (dec (count (:ops s))))
+                                         (inc (:n s))
+                                         0))))))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
