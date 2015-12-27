@@ -3,6 +3,8 @@
             [om.dom :as dom :include-macros true]
             [quil.core :as q :include-macros true]))
 
+(enable-console-print!)
+
 ;; ======================================================================
 ;; Constants
 
@@ -49,7 +51,10 @@
   [{:keys [y side]}]
   (+ y side))
 
-(enable-console-print!)
+(defn sq-clear? [{:keys [squares]} sq-id]
+  (let [sq (get squares sq-id)]
+    (every? (complement (partial sq-overlap? sq))
+            (get (group-by :y (vals squares)) (sq->top sq)))))
 
 (defn dist [a b]
   (letfn [(d [k]
@@ -58,16 +63,20 @@
 
 ;; http://clj-me.blogspot.com.uy/2009/06/linear-interpolation-and-sorted-map.html
 (defn interpolator
- "Takes a coll of 2D points (vectors) and returns
+  "Takes a coll of 2D points (vectors) and returns
   their linear interpolation function."
- [points]
+  [points]
   (let [m (into (sorted-map) points)]
     (fn [x]
+      (assert (number? x))
       (let [[[x1 y1]] (rsubseq m <= x)
             [[x2 y2]] (subseq m > x)]
-        (if x2
-          (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1))))
-          y1)))))
+        (let [out (if x2
+                    (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1))))
+                    y1)]
+          (assert (not (js/isNaN out))
+                  [x1 x2 y1 y2 x])
+          out)))))
 
 (defn path-through
   "Returns a path through all the sqs"
@@ -114,7 +123,9 @@
       (recur (rest sqs) (stack-sq stack (first sqs)))
       stack)))
 
-(defn idx-squares [sqs]
+(defn idx-squares
+  "Returns the squares idx by id"
+  [sqs]
   (zipmap (map :id sqs) sqs))
 
 (defn on-top?
@@ -184,25 +195,17 @@
 (comment
   (println (sort-by first (support-pairs (group-by sq->top (vals sqs))))))
 
-(defn setup []
-  (q/frame-rate frame-rate)
-  (q/color-mode :rgb)
-  (q/background 200)
-  (swap! app-state
-         #(let [sqs (sort-by :y (stacked-squares 50))]
-            (assoc %
-                   :squares (idx-squares sqs)
-                   :ops [{:type :move :move 49 :to 48}
-                         {:type :claw :move 48 :to 1}
-                         {:type :move :move 1 :to 2}
-                         {:type :claw :move 2 :to 49}
-                         {:type :move :move 49 :to 47}
-                         {:type :claw :move 47 :to 1}
-                         {:type :move :move 1 :to 3}
-                         {:type :claw :move 3 :to 49}
-                         ]))))
+(defn valid-op? [s {:keys [type move to] :as op}]
+  (println op)
+  (println (sq-clear? s move) (sq-clear? s to))
+  (and (contains? (:squares s) move)
+       (contains? (:squares s) to)
+       (or (not= :move type)
+           (and (sq-clear? s move) (sq-clear? s to)))))
 
-(defn apply-op [s {:keys [move to] :as op}]
+(defn apply-op
+  "Returns the squares after the operation is applied"
+  [s {:keys [move to] :as op}]
   (let [sq (get (:squares s) move)
         target-sq (get (:squares s) to)
         target-sq' (assoc target-sq :y (sq->top target-sq))
@@ -211,22 +214,56 @@
     (cond-> (assoc s :claw sq')
       (= :move (:type op)) (assoc-in [:squares (:id sq')] sq'))))
 
+(defn valid-plan? [s ops]
+  (:valid? (reduce (fn [acc op]
+                     (cond
+                       (not (:valid? acc)) acc
+                       (not (valid-op? (:s acc) op))
+                       (assoc acc :valid? false)
+                       :else (update acc :s #(apply-op % op))))
+                   {:valid? true :s (assoc s :frame 1)}
+                   ops)))
+
+(defn plan-moves [s ops]
+  (if (valid-plan? s ops)
+    (->> (drop 1 (cycle ops))
+         (map (fn [{:keys [to]} {:keys [move]}]
+                {:type :claw :move to :to move})
+              ops)
+         (interleave ops)
+         vec)
+    []))
+
+(defn setup []
+  (q/frame-rate frame-rate)
+  (q/color-mode :rgb)
+  (q/background 200)
+  (swap! app-state
+         #(let [sqs (sort-by :y (stacked-squares 10))
+                idx (idx-squares sqs)]
+            (assoc %
+                   :squares idx
+                   :ops (cycle (plan-moves {:squares idx}
+                                           [{:type :move :move 7 :to 9}
+                                            {:type :move :move 7 :to 8}]))))))
+
+
 (defn draw []
   (clear-canvas!)
   (let [s @app-state
-        op (nth (:ops s) (:n s))
+        op (first (:ops s))
         s' (apply-op s op)]
     (doseq [sq (vals (:squares s'))]
       (square! sq))
-    (grip! (get s' :claw))
+    (when (and (some? (get-in s' [:claw :x]))
+               (some? (get-in s' [:claw :y])))
+      (grip! (get s' :claw)))
     (swap! app-state
            (fn [s]
              (let [f (:frame s)]
                (if (> 1 f)
                  (assoc s :frame (+ f (/ 1 frame-rate)))
-                 (assoc s' :frame 0 :n (if (< (:n s) (dec (count (:ops s))))
-                                         (inc (:n s))
-                                         0))))))))
+                 (assoc s' :frame 0 :ops (rest (:ops s')))))))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
