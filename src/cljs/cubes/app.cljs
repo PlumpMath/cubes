@@ -89,7 +89,7 @@
   [{:keys [x y side]}]
   [(+ x (/ side 4)) (+ y (/ side 1.5))])
 
-(defn posible-y
+(defn possible-y
   "Returns y position for sq to be stacked on top of squares"
   [squares sq]
   (or (some->> squares
@@ -101,7 +101,7 @@
 (defn stack-sq
   "Stacks the new sq on top of the squares"
   [squares sq]
-  (conj squares (assoc sq :y (posible-y squares sq))))
+  (conj squares (assoc sq :y (possible-y squares sq))))
 
 (defn stacked-squares
   "Generate n stacked-squares"
