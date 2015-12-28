@@ -134,6 +134,8 @@
   (and (sq-overlap? a b)
        (= (:y a) (sq->top b))))
 
+;; TODO: this function requires a different index to be efficient
+;; multiple indexes are necessary -> datascript
 (defn supported-by
   "Returns all the squares that support sq, where y-sqs is indexed by sq->top"
   [y-sqs sq]
@@ -156,13 +158,22 @@
        (map :id)))
 
 (defn possible-actions
-  "For a determined state, it returns all the possible actions"
+  "All the possible actions for a determined state"
   [sqs]
   (let [c-sqs (clear-sqs sqs)]
     (->> (for [x c-sqs y c-sqs]
            (when-not (= x y) [x y]))
          (remove nil?)
          (map (fn [[x y]] {:type :move :move x :to y})))))
+
+(defn find-sq [sqs id]
+  (first (filter #(= id (:id %)) sqs)))
+
+;; goal is a over b  as [a b]
+(defn distance [goal sqs]
+  (println (supported-by sqs (find-sq sqs (first goal))))
+  (+ (count (supported-by sqs (find-sq sqs (first goal))))
+     (count (supported-by sqs (find-sq sqs (second goal))))))
 
 ;; ======================================================================
 ;; Quil
