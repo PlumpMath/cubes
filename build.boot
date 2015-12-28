@@ -7,6 +7,7 @@
                  [pandeiro/boot-http        "0.6.3"      :scope "test"]
                  [org.clojure/clojurescript "1.7.170"]
                  [org.omcljs/om "0.9.0"]
+                 [datascript "0.13.3"]
                  [quil "2.3.0"]])
 
 (require

@@ -1,7 +1,8 @@
 (ns cubes.app
   (:require [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
-            [quil.core :as q :include-macros true]))
+            [quil.core :as q :include-macros true]
+            [datascript.core :as d]))
 
 (enable-console-print!)
 
@@ -15,21 +16,17 @@
 ;; ======================================================================
 ;; Squares
 
-(def c (atom 0))
-
-(defn inc-id []
-  (let [out @c]
-    (swap! c inc)
-    out))
-
 (defn rand-rgb []
-  [(rand-int 255) (rand-int 255) (rand-int 255)])
+  {:r (rand-int 255) :g (rand-int 255) :b (rand-int 255)})
+
+(defn sq->rgb [sq]
+  [(:r sq) (:g sq) (:b sq)])
 
 ;; TODO: take x as arg to decouple from grid-size
 (defn rand-square []
   (let [side 40]
-    {:id (inc-id) :rgb (rand-rgb) :side side
-     :y 0 :x (rand-int (- (first grid-size) side))}))
+    (merge {:side side :y 0 :x (rand-int (- (first grid-size) side))}
+           (rand-rgb))))
 
 (defn overlap?
   "Checks if two integer intervals overlap"
@@ -51,10 +48,11 @@
   [{:keys [y side]}]
   (+ y side))
 
-(defn sq-clear? [{:keys [squares]} sq-id]
-  (let [sq (get squares sq-id)]
-    (every? (complement (partial sq-overlap? sq))
-            (get (group-by :y (vals squares)) (sq->top sq)))))
+(defn sq-clear? [db sq-id]
+  (empty? (d/q '[:find ?supports :in $ ?id
+                 :where [?id :supports ?supports]]
+               db
+               sq-id)))
 
 (defn dist [a b]
   (letfn [(d [k]
@@ -74,8 +72,7 @@
         (let [out (if x2
                     (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1))))
                     y1)]
-          (assert (not (js/isNaN out))
-                  [x1 x2 y1 y2 x])
+          (assert (not (js/isNaN out)) [x1 x2 y1 y2 x])
           out)))))
 
 (defn path-through
@@ -100,33 +97,56 @@
   [{:keys [x y side]}]
   [(+ x (/ side 4)) (+ y (/ side 1.5))])
 
-(defn possible-y
-  "Returns y position for sq to be stacked on top of squares"
-  [squares sq]
-  (or (some->> squares
-               (filter (partial sq-overlap? sq))
-               (apply max-key sq->top)
-               sq->top)
-      0))
+(defn ent->map [ent]
+  (merge {:db/id (:db/id ent)} ent))
 
-(defn stack-sq
+(defn get-sq [db id]
+  {:pre [(number? id)]}
+  (ent->map (d/entity db id)))
+
+(defn db->squares [db]
+  (->> (d/q '[:find ?id :where [?id :x _]] db)
+       (map first)
+       (map (partial get-sq db))))
+
+(defn find-support
+  "Returns the support for an x position, or nil if none is found"
+  [conn sq]
+  (some->> (db->squares @conn)
+           (filter (partial sq-overlap? sq))
+           (apply max-key sq->top)))
+
+(defn stack-tx [sq target-sq]
+  [[:db/add (:db/id target-sq) :supports (:db/id sq)]
+   [:db/add (:db/id sq) :y (sq->top target-sq)]
+   [:db/add (:db/id sq) :x (:x target-sq)]])
+
+(defn op->tx [db {:keys [move to type]}]
+  (if (= :claw type)
+    []
+    (concat (mapv (fn [[id]] [:db/retract id :supports move])
+                  (d/q '[:find ?id :in $ ?sq
+                         :where [?id :supports ?sq]]
+                       db
+                       move))
+            (stack-tx (get-sq db move) (get-sq db to)))))
+
+(defn stack-sq!
   "Stacks the new sq on top of the squares"
-  [squares sq]
-  (conj squares (assoc sq :y (possible-y squares sq))))
+  [conn sq]
+  (d/transact conn
+              (let [temp-id -1
+                    sq' (assoc sq :db/id temp-id)]
+                (concat [sq']
+                        (if-let [support-sq (find-support conn sq)]
+                          (stack-tx sq' support-sq)
+                          [[:db/add temp-id :y 0]])))))
 
-(defn stacked-squares
-  "Generate n stacked-squares"
-  [n]
-  (loop [sqs (map (fn [_] (rand-square)) (range n))
-         stack []]
-    (if (seq sqs)
-      (recur (rest sqs) (stack-sq stack (first sqs)))
-      stack)))
-
-(defn idx-squares
-  "Returns the squares idx by id"
-  [sqs]
-  (zipmap (map :id sqs) sqs))
+(defn stack-squares!
+  "Add n stacked squares to conn"
+  [conn n]
+  (doseq [sq (map (fn [_] (rand-square)) (range n))]
+    (stack-sq! conn sq)))
 
 (defn on-top?
   "Is a on top of b?"
@@ -134,8 +154,6 @@
   (and (sq-overlap? a b)
        (= (:y a) (sq->top b))))
 
-;; TODO: this function requires a different index to be efficient
-;; multiple indexes are necessary -> datascript
 (defn supported-by
   "Returns all the squares that support sq, where y-sqs is indexed by sq->top"
   [y-sqs sq]
@@ -148,14 +166,14 @@
   (->> (vals y-sqs)
        (mapcat identity)
        (mapcat (fn [sq]
-                 (map #(vector (:id sq) (:id %)) (supported-by y-sqs sq))))))
+                 (map #(vector (:db/id sq) (:db/id %)) (supported-by y-sqs sq))))))
 
 (defn clear-sqs
   "Returns all the sqs which are not supporting other sqs"
   [sqs]
   (->> sqs
        (filter (fn [sq] (every? #(not (on-top? % sq)) sqs)))
-       (map :id)))
+       (map :db/id)))
 
 (defn possible-actions
   "All the possible actions for a determined state"
@@ -167,13 +185,34 @@
          (map (fn [[x y]] {:type :move :move x :to y})))))
 
 (defn find-sq [sqs id]
-  (first (filter #(= id (:id %)) sqs)))
+  (first (filter #(= id (:db/id %)) sqs)))
 
 ;; goal is a over b  as [a b]
 (defn distance [goal sqs]
-  (println (supported-by sqs (find-sq sqs (first goal))))
   (+ (count (supported-by sqs (find-sq sqs (first goal))))
      (count (supported-by sqs (find-sq sqs (second goal))))))
+
+(defn valid-op? [db {:keys [type move to] :as op}]
+  (and (some? (d/entity db move)) (some? (d/entity db to))
+       (or (not= :move type)
+           (and (sq-clear? db move) (sq-clear? db to)))))
+
+(defn apply-op!
+  "Returns the squares after the operation is applied"
+  [conn {:keys [move to] :as op}]
+  (d/transact conn (op->tx @conn op)))
+
+(defn step-op [db op]
+  (d/db-with db (op->tx db op)))
+
+(defn valid-plan?
+  [db plan]
+  (->> plan
+       (reduce (fn [db op]
+                 (when (and (some? db) (valid-op? db op))
+                   (step-op db op)))
+               db)
+       some?))
 
 ;; ======================================================================
 ;; Quil
@@ -189,13 +228,13 @@
   (q/stroke 0 0 0)
   (q/fill 0 0 0)
   (let [[x y] (sq->center sq)]
-    (q/text (:id sq) x y)))
+    (q/text (:db/id sq) x y)))
 
 (defn square!
   "Draws a square in the screen"
   [sq]
-  (let [{:keys [rgb x y side] :as sq'} (xy->xy sq)]
-    (apply q/fill rgb)
+  (let [{:keys [x y side] :as sq'} (xy->xy sq)]
+    (apply q/fill (sq->rgb sq'))
     (q/rect x y side side)
     (sq-text! sq')))
 
@@ -213,84 +252,71 @@
     (claw! (+ x (/ side 2)) y)))
 
 (defonce app-state
-  (atom {:squares {}
-         :claw {}
+  (atom {:conn nil
          :ops []
-         :n 0
          :frame 0}))
 
-(comment
-  (println (sort-by first (support-pairs (group-by sq->top (vals sqs))))))
+(defn state->render
+  "Data to render"
+  [db op f]
+  (if (empty? op)
+    {:squares (db->squares db)}
+    (let [sq-id (:move op)
+          sq (get-sq db sq-id)
+          target-sq (get-sq db (:to op))
+          target-sq' (assoc target-sq :y (sq->top target-sq))
+          [x y] ((rect-path sq target-sq') f)
+          sq' (assoc sq :x x :y y)]
+      {:claw sq'
+       :squares (db->squares (if (= :move (:type op))
+                               (d/db-with db [[:db/add sq-id :x x]
+                                              [:db/add sq-id :y y]])
+                               db))})))
 
-(defn valid-op? [s {:keys [type move to] :as op}]
-  (println op)
-  (println (sq-clear? s move) (sq-clear? s to))
-  (and (contains? (:squares s) move)
-       (contains? (:squares s) to)
-       (or (not= :move type)
-           (and (sq-clear? s move) (sq-clear? s to)))))
-
-(defn apply-op
-  "Returns the squares after the operation is applied"
-  [s {:keys [move to] :as op}]
-  (let [sq (get (:squares s) move)
-        target-sq (get (:squares s) to)
-        target-sq' (assoc target-sq :y (sq->top target-sq))
-        [x y] ((rect-path sq target-sq') (:frame s))
-        sq' (assoc sq :x x :y y)]
-    (cond-> (assoc s :claw sq')
-      (= :move (:type op)) (assoc-in [:squares (:id sq')] sq'))))
-
-(defn valid-plan? [s ops]
-  (:valid? (reduce (fn [acc op]
-                     (cond
-                       (not (:valid? acc)) acc
-                       (not (valid-op? (:s acc) op))
-                       (assoc acc :valid? false)
-                       :else (update acc :s #(apply-op % op))))
-                   {:valid? true :s (assoc s :frame 1)}
-                   ops)))
-
-(defn plan-moves [s ops]
-  (if (valid-plan? s ops)
-    (->> (drop 1 (cycle ops))
-         (map (fn [{:keys [to]} {:keys [move]}]
-                {:type :claw :move to :to move})
-              ops)
-         (interleave ops)
-         vec)
-    []))
+(defn add-claw-moves
+  "Add intermediate claw moves to the plan (for rendering)"
+  [ops]
+  (->> (drop 1 (cycle ops))
+       (map (fn [{:keys [to]} {:keys [move]}]
+              {:type :claw :move to :to move})
+            ops)
+       (interleave ops)
+       vec))
 
 (defn setup []
   (q/frame-rate frame-rate)
   (q/color-mode :rgb)
   (q/background 200)
-  (swap! app-state
-         #(let [sqs (sort-by :y (stacked-squares 10))
-                idx (idx-squares sqs)]
-            (assoc %
-                   :squares idx
-                   :ops (cycle (plan-moves {:squares idx}
-                                           [{:type :move :move 7 :to 9}
-                                            {:type :move :move 7 :to 8}]))))))
-
+  (let [schema {:supports {:db/cardinality :db.cardinality/many
+                           :db/valueType :db.type/ref}}
+        conn (d/create-conn schema)]
+    (stack-squares! conn 10)
+    (swap! app-state
+           #(assoc %
+                   :conn conn :frame 0
+                   :ops (let [plan [{:type :move :move 8 :to 10}
+                                    {:type :move :move 8 :to 9}]]
+                          (if (valid-plan? @conn plan)
+                            (cycle (add-claw-moves plan))
+                            []))))))
 
 (defn draw []
   (clear-canvas!)
-  (let [s @app-state
-        op (first (:ops s))
-        s' (apply-op s op)]
-    (doseq [sq (vals (:squares s'))]
+  (let [{:keys [conn ops frame]} @app-state
+        op (first ops)
+        {:keys [squares claw]} (state->render @conn op frame)]
+    (doseq [sq squares]
       (square! sq))
-    (when (and (some? (get-in s' [:claw :x]))
-               (some? (get-in s' [:claw :y])))
-      (grip! (get s' :claw)))
+    (when (and (:x claw) (:y claw))
+      (grip! claw))
     (swap! app-state
            (fn [s]
              (let [f (:frame s)]
                (if (> 1 f)
                  (assoc s :frame (+ f (/ 1 frame-rate)))
-                 (assoc s' :frame 0 :ops (rest (:ops s')))))))))
+                 (do (when (some? op)
+                       (apply-op! conn op))
+                     (assoc s :frame 0 :ops (rest (:ops s))))))))))
 
 (q/defsketch example
   :title "Oh so many grey circles"
