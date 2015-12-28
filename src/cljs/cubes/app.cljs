@@ -148,6 +148,22 @@
        (mapcat (fn [sq]
                  (map #(vector (:id sq) (:id %)) (supported-by y-sqs sq))))))
 
+(defn clear-sqs
+  "Returns all the sqs which are not supporting other sqs"
+  [sqs]
+  (->> sqs
+       (filter (fn [sq] (every? #(not (on-top? % sq)) sqs)))
+       (map :id)))
+
+(defn possible-actions
+  "For a determined state, it returns all the possible actions"
+  [sqs]
+  (let [c-sqs (clear-sqs sqs)]
+    (->> (for [x c-sqs y c-sqs]
+           (when-not (= x y) [x y]))
+         (remove nil?)
+         (map (fn [[x y]] {:type :move :move x :to y})))))
+
 ;; ======================================================================
 ;; Quil
 
