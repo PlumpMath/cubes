@@ -289,6 +289,17 @@
     (- js/Infinity)
     (+ (count (sq-supports db sq)) (count (sq-supports db tsq)))))
 
+(defn plan-moves [goal db]
+  (loop [db db plan [] n 0]
+    (cond
+      (done? goal db) plan
+      (= 100 n) [:not-found plan]
+      :else (let [ops (->> (possible-ops db)
+                           (map (juxt identity (partial step-op db)))
+                           (sort-by (comp (partial distance goal) second)))]
+              (let [[op db'] (first ops)]
+                (recur db' (conj plan op) (inc n)))))))
+
 ;; ======================================================================
 ;; Quil Helpers
 
