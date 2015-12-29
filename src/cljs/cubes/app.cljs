@@ -1,5 +1,6 @@
 (ns cubes.app
-  (:require [om.core :as om :include-macros true]
+  (:require [clojure.set :as set]
+            [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [quil.core :as q :include-macros true]
             [datascript.core :as d]))
@@ -155,42 +156,44 @@
        (= (:y a) (sq->top b))))
 
 (defn supported-by
-  "Returns all the squares that support sq, where y-sqs is indexed by sq->top"
-  [y-sqs sq]
-  (some->> (get y-sqs (:y sq))
-           (filter #(and (not= sq %) (on-top? sq %)))))
+  "All the squares that support sq, where y-sqs is indexed by sq->top"
+  [db sq-id]
+  (->> sq-id
+       (d/q '[:find ?id :in $ ?sq :where [?id :supports ?sq]] db)
+       (map first)))
 
 (defn support-pairs
-  "Returns all the support pairs in the indexed stacked-squares"
-  [y-sqs]
-  (->> (vals y-sqs)
-       (mapcat identity)
+  "All the support pairs in the indexed stacked-squares"
+  [db]
+  (->> (db->squares db)
        (mapcat (fn [sq]
-                 (map #(vector (:db/id sq) (:db/id %)) (supported-by y-sqs sq))))))
+                 (map (partial vector (:db/id sq))
+                      (supported-by db (:db/id sq)))))))
 
 (defn clear-sqs
-  "Returns all the sqs which are not supporting other sqs"
-  [sqs]
-  (->> sqs
-       (filter (fn [sq] (every? #(not (on-top? % sq)) sqs)))
-       (map :db/id)))
+  "All the sqs which are not supporting other sqs"
+  [db]
+  (let [all-sqs (set (map :db/id (db->squares db)))
+        support-sqs (->> db
+                         (d/q '[:find ?id :where [?id :supports _]])
+                         (map first)
+                         set)]
+    (set/difference all-sqs support-sqs)))
 
+;; TODO: missing put on table
 (defn possible-actions
   "All the possible actions for a determined state"
-  [sqs]
-  (let [c-sqs (clear-sqs sqs)]
+  [db]
+  (let [c-sqs (clear-sqs db)]
     (->> (for [x c-sqs y c-sqs]
            (when-not (= x y) [x y]))
          (remove nil?)
          (map (fn [[x y]] {:type :move :move x :to y})))))
 
-(defn find-sq [sqs id]
-  (first (filter #(= id (:db/id %)) sqs)))
-
 ;; goal is a over b  as [a b]
-(defn distance [goal sqs]
-  (+ (count (supported-by sqs (find-sq sqs (first goal))))
-     (count (supported-by sqs (find-sq sqs (second goal))))))
+(defn distance [goal db]
+  (+ (count (supported-by db (first goal)))
+     (count (supported-by db (second goal)))))
 
 (defn valid-op? [db {:keys [type move to] :as op}]
   (and (some? (d/entity db move)) (some? (d/entity db to))
@@ -202,7 +205,9 @@
   [conn {:keys [move to] :as op}]
   (d/transact conn (op->tx @conn op)))
 
-(defn step-op [db op]
+(defn step-op
+  "Returns a new database as if the operation was applied"
+  [db op]
   (d/db-with db (op->tx db op)))
 
 (defn valid-plan?
