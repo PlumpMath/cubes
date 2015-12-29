@@ -139,14 +139,6 @@
        (d/q '[:find ?id :in $ ?sq :where [?id :supports ?sq]] db)
        (map first)))
 
-(defn support-pairs
-  "All the support pairs in the indexed stacked-squares"
-  [db]
-  (->> (db->squares db)
-       (mapcat (fn [sq]
-                 (map (partial vector (:db/id sq))
-                      (supported-by db (:db/id sq)))))))
-
 (defn clear-sqs
   "All the sqs which are not supporting other sqs"
   [db]
@@ -254,6 +246,22 @@
 (defmethod valid-op? :move [db {:keys [move to] :as op}]
   (and (sqs-exist? db op) (sq-clear? db move) (sq-clear? db to)))
 
+(defn coords->sq
+  "Returns the square the coordinates belong to (if any)"
+  [db x y]
+  (let [between? '[[[between ?x0 ?side ?x]
+                    [(< ?x0 ?x)]
+                    [(+ ?x0 ?side) ?x1]
+                    [(< ?x ?x1)]]]
+        in-sq? '[[[in-sq ?x ?y ?id]
+                  [?id :x ?x0]
+                  [?id :y ?y0]
+                  [?id :side ?side]
+                  [between ?x0 ?side ?x]
+                  [between ?y0 ?side ?y]]]]
+    (d/q '[:find ?sq :in $ % ?x ?y
+           :where [in-sq ?x ?y ?sq]]
+         db (concat between? in-sq?) x y)))
 
 ;; ======================================================================
 ;; Planning
