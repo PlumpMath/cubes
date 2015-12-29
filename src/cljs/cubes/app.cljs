@@ -122,15 +122,18 @@
    [:db/add (:db/id sq) :y (sq->top target-sq)]
    [:db/add (:db/id sq) :x (:x target-sq)]])
 
-(defn op->tx [db {:keys [move to type]}]
-  (if (= :claw type)
-    []
-    (concat (mapv (fn [[id]] [:db/retract id :supports move])
-                  (d/q '[:find ?id :in $ ?sq
-                         :where [?id :supports ?sq]]
-                       db
-                       move))
-            (stack-tx (get-sq db move) (get-sq db to)))))
+(defmulti op->tx (fn [_ op] (:type op)))
+
+(defmethod op->tx :default [_ _] [])
+
+(defmethod op->tx :move
+  [db {:keys [move to]}]
+  (concat (mapv (fn [[id]] [:db/retract id :supports move])
+                (d/q '[:find ?id :in $ ?sq
+                       :where [?id :supports ?sq]]
+                     db
+                     move))
+          (stack-tx (get-sq db move) (get-sq db to))))
 
 (defn stack-sq!
   "Stacks the new sq on top of the squares"
@@ -195,10 +198,19 @@
   (+ (count (supported-by db (first goal)))
      (count (supported-by db (second goal)))))
 
-(defn valid-op? [db {:keys [type move to] :as op}]
-  (and (some? (d/entity db move)) (some? (d/entity db to))
-       (or (not= :move type)
-           (and (sq-clear? db move) (sq-clear? db to)))))
+(defmulti valid-op? (fn [_ op] (:type op)))
+
+(defmethod valid-op? :default [_ _] true)
+
+(defn sqs-exist? [db {:keys [move to]}]
+  (and (some? (d/entity db move)) (some? (d/entity db to))))
+
+(defmethod valid-op? :claw [db op]
+  (sqs-exist? db op))
+
+(defmethod valid-op? :move [db {:keys [move to] :as op}]
+  (and (sqs-exist? db op)
+       (and (sq-clear? db move) (sq-clear? db to))))
 
 (defn apply-op!
   "Returns the squares after the operation is applied"
@@ -261,22 +273,28 @@
          :ops []
          :frame 0}))
 
-(defn state->render
-  "Data to render"
-  [db op f]
-  (if (empty? op)
-    {:squares (db->squares db)}
-    (let [sq-id (:move op)
-          sq (get-sq db sq-id)
-          target-sq (get-sq db (:to op))
-          target-sq' (assoc target-sq :y (sq->top target-sq))
-          [x y] ((rect-path sq target-sq') f)
-          sq' (assoc sq :x x :y y)]
-      {:claw sq'
-       :squares (db->squares (if (= :move (:type op))
-                               (d/db-with db [[:db/add sq-id :x x]
-                                              [:db/add sq-id :y y]])
-                               db))})))
+(defmulti state->render (fn [_ op _] (:type op)))
+
+(defmethod state->render :default [db _ _]
+  {:squares (db->squares db)})
+
+(defn move-sq [db op f]
+  (let [sq-id (:move op)
+        sq (get-sq db sq-id)
+        target-sq (get-sq db (:to op))
+        target-sq' (assoc target-sq :y (sq->top target-sq))
+        [x y] ((rect-path sq target-sq') f)]
+    (assoc sq :x x :y y)))
+
+(defmethod state->render :claw [db op f]
+  {:claw (move-sq db op f)
+   :squares (db->squares db)})
+
+(defmethod state->render :move [db op f]
+  (let [{:keys [x y db/id] :as sq'} (move-sq db op f)]
+    {:claw sq'
+     :squares (db->squares (d/db-with db [[:db/add id :x x]
+                                          [:db/add id :y y]]))}))
 
 (defn add-claw-moves
   "Add intermediate claw moves to the plan (for rendering)"
