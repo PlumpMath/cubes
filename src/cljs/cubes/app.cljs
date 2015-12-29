@@ -121,6 +121,17 @@
            (filter (partial sq-overlap? sq))
            (apply max-key sq->top)))
 
+(def on-top '[[[on-top ?a ?b]
+               [?b :supports ?a]]
+              [[on-top ?a ?b]
+               [?b :supports ?x]
+               [on-top ?a ?x]]])
+
+(defn sq-supports [db sq]
+  (map first (d/q '[:find ?id :in $ % ?sq
+                    :where [on-top ?id ?sq]]
+                  db on-top sq)))
+
 (defn supported-by
   "All the squares that support sq, where y-sqs is indexed by sq->top"
   [db sq-id]
@@ -274,7 +285,9 @@
          (concat (map (fn [sq] {:type :clear :move sq}) c-sqs)))))
 
 (defn distance [[sq tsq] db]
-  (+ (count (supported-by db sq)) (count (supported-by db tsq))))
+  (if (done? [sq tsq] db)
+    (- js/Infinity)
+    (+ (count (sq-supports db sq)) (count (sq-supports db tsq)))))
 
 ;; ======================================================================
 ;; Quil Helpers
