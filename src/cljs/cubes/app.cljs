@@ -211,27 +211,6 @@
   (doseq [sq (map (fn [_] (rand-square)) (range n))]
     (stack-sq! conn sq)))
 
-(defn on-top?
-  "Is a on top of b?"
-  [a b]
-  (and (sq-overlap? a b)
-       (= (:y a) (sq->top b))))
-
-;; goal is a over b  as [a b]
-(defn distance [goal db]
-  (+ (count (supported-by db (first goal)))
-     (count (supported-by db (second goal)))))
-
-(defn possible-ops
-  "All the possible actions for a determined state"
-  [db]
-  (let [c-sqs (clear-sqs db)]
-    (->> (for [x c-sqs y c-sqs]
-           (when-not (= x y) [x y]))
-         (remove nil?)
-         (map (fn [[x y]] {:type :move :move x :to y}))
-         (concat (map (fn [sq] {:type :clear :move sq}) c-sqs)))))
-
 (defmulti valid-op? (fn [_ op] (:type op)))
 
 (defmethod valid-op? :default [_ _] true)
@@ -262,6 +241,9 @@
   [db op]
   (d/db-with db (op->tx db op)))
 
+;; ======================================================================
+;; Planning
+
 (defn maybe-step-op
   "Step-op that checks if the op is valid, returns nil if not"
   [db op]
@@ -272,6 +254,27 @@
   "Checks if the plan is valid by applying all the ops"
   [db plan]
   (some? (reduce maybe-step-op db plan)))
+
+(defn done?
+  "Is the goal achieved in the db?"
+  [[sq tsq] db]
+  (contains? (d/q '[:find ?s :in $ ?tsq
+                    :where [?tsq :supports ?s]]
+                  db tsq)
+             [sq]))
+
+(defn possible-ops
+  "All possible future ops for a determined db"
+  [db]
+  (let [c-sqs (clear-sqs db)]
+    (->> (for [x c-sqs y c-sqs]
+           (when-not (= x y) [x y]))
+         (remove nil?)
+         (map (fn [[x y]] {:type :move :move x :to y}))
+         (concat (map (fn [sq] {:type :clear :move sq}) c-sqs)))))
+
+(defn distance [[sq tsq] db]
+  (+ (count (supported-by db sq)) (count (supported-by db tsq))))
 
 ;; ======================================================================
 ;; Quil Helpers
