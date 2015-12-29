@@ -117,47 +117,6 @@
            (filter (partial sq-overlap? sq))
            (apply max-key sq->top)))
 
-(defn stack-tx [sq target-sq]
-  [[:db/add (:db/id target-sq) :supports (:db/id sq)]
-   [:db/add (:db/id sq) :y (sq->top target-sq)]
-   [:db/add (:db/id sq) :x (:x target-sq)]])
-
-(defmulti op->tx (fn [_ op] (:type op)))
-
-(defmethod op->tx :default [_ _] [])
-
-(defmethod op->tx :move
-  [db {:keys [move to]}]
-  (concat (mapv (fn [[id]] [:db/retract id :supports move])
-                (d/q '[:find ?id :in $ ?sq
-                       :where [?id :supports ?sq]]
-                     db
-                     move))
-          (stack-tx (get-sq db move) (get-sq db to))))
-
-(defn stack-sq!
-  "Stacks the new sq on top of the squares"
-  [conn sq]
-  (d/transact conn
-              (let [temp-id -1
-                    sq' (assoc sq :db/id temp-id)]
-                (concat [sq']
-                        (if-let [support-sq (find-support conn sq)]
-                          (stack-tx sq' support-sq)
-                          [[:db/add temp-id :y 0]])))))
-
-(defn stack-squares!
-  "Add n stacked squares to conn"
-  [conn n]
-  (doseq [sq (map (fn [_] (rand-square)) (range n))]
-    (stack-sq! conn sq)))
-
-(defn on-top?
-  "Is a on top of b?"
-  [a b]
-  (and (sq-overlap? a b)
-       (= (:y a) (sq->top b))))
-
 (defn supported-by
   "All the squares that support sq, where y-sqs is indexed by sq->top"
   [db sq-id]
@@ -183,6 +142,72 @@
                          set)]
     (set/difference all-sqs support-sqs)))
 
+(defn stack-tx [sq target-sq]
+  [[:db/add (:db/id target-sq) :supports (:db/id sq)]
+   [:db/add (:db/id sq) :y (sq->top target-sq)]
+   [:db/add (:db/id sq) :x (:x target-sq)]])
+
+(defn unsupport-tx [db sq]
+  (mapv (fn [id] [:db/retract id :supports sq])
+        (supported-by db sq)))
+
+(defmulti op->tx (fn [_ op] (:type op)))
+
+(defmethod op->tx :default [_ _] [])
+
+(defmethod op->tx :move
+  [db {:keys [move to]}]
+  (concat (unsupport-tx db move)
+          (stack-tx (get-sq db move) (get-sq db to))))
+
+(defn find-clear-space
+  "Coordinate that has an adjacent clear space (length: width)"
+  [db width]
+  (let [l (first grid-size)
+        base-sqs (->> db
+                      (d/q '[:find (pull ?i [:db/id :side :x])
+                             :where [?i :y 0]])
+                      (mapcat identity))]
+    (->> base-sqs
+         (map #(+ (:side %) (:x %)))
+         (concat [0])
+         (filter (fn [x]
+                   (every? #(not (sq-overlap? {:x x :side width} %)) base-sqs)))
+         first)))
+
+(defmethod op->tx :clear
+  [db {:keys [move]}]
+  (let [sq (get-sq db move)]
+    (cond
+      (zero? (:y sq)) []
+      :else (concat (unsupport-tx db move)
+                    [[:db/add move :y 0]
+                     [:db/add move :x (find-clear-space db (:side sq))]]))))
+
+(defn stack-sq!
+  "Stacks the new sq on top of the squares"
+  [conn sq]
+  (d/transact conn
+              (let [temp-id -1
+                    sq' (assoc sq :db/id temp-id)]
+                (concat [sq']
+                        (if-let [support-sq (find-support conn sq)]
+                          (stack-tx sq' support-sq)
+                          [[:db/add temp-id :y 0]])))))
+
+(defn stack-squares!
+  "Add n stacked squares to conn"
+  [conn n]
+  (doseq [sq (map (fn [_] (rand-square)) (range n))]
+    (stack-sq! conn sq)))
+
+(defn on-top?
+  "Is a on top of b?"
+  [a b]
+  (and (sq-overlap? a b)
+       (= (:y a) (sq->top b))))
+
+
 ;; TODO: missing put on table
 (defn possible-actions
   "All the possible actions for a determined state"
@@ -202,8 +227,14 @@
 
 (defmethod valid-op? :default [_ _] true)
 
+(defn sq-exist? [db id]
+  (some? (d/entity db id)))
+
 (defn sqs-exist? [db {:keys [move to]}]
-  (and (some? (d/entity db move)) (some? (d/entity db to))))
+  (and (sq-exist? db move)  (sq-exist? db to)))
+
+(defmethod valid-op? :clear [db op]
+  (sq-exist? db (:move op)))
 
 (defmethod valid-op? :claw [db op]
   (sqs-exist? db op))
@@ -278,13 +309,13 @@
 (defmethod state->render :default [db _ _]
   {:squares (db->squares db)})
 
-(defn move-sq [db op f]
-  (let [sq-id (:move op)
-        sq (get-sq db sq-id)
-        target-sq (get-sq db (:to op))
-        target-sq' (assoc target-sq :y (sq->top target-sq))
+(defn sq->target [sq target-sq f]
+  (let [target-sq' (assoc target-sq :y (sq->top target-sq))
         [x y] ((rect-path sq target-sq') f)]
     (assoc sq :x x :y y)))
+
+(defn move-sq [db op f]
+  (sq->target (get-sq db (:move op)) (get-sq db (:to op)) f))
 
 (defmethod state->render :claw [db op f]
   {:claw (move-sq db op f)
@@ -292,6 +323,14 @@
 
 (defmethod state->render :move [db op f]
   (let [{:keys [x y db/id] :as sq'} (move-sq db op f)]
+    {:claw sq'
+     :squares (db->squares (d/db-with db [[:db/add id :x x]
+                                          [:db/add id :y y]]))}))
+
+(defmethod state->render :clear [db op f]
+  (let [sq (get-sq db (:move op))
+        fake-sq {:side (:side sq) :y 0 :x (find-clear-space db (:side sq))}
+        {:keys [x y db/id] :as sq'} (sq->target sq fake-sq f)]
     {:claw sq'
      :squares (db->squares (d/db-with db [[:db/add id :x x]
                                           [:db/add id :y y]]))}))
@@ -318,9 +357,10 @@
            #(assoc %
                    :conn conn :frame 0
                    :ops (let [plan [{:type :move :move 8 :to 10}
-                                    {:type :move :move 8 :to 9}]]
+                                    {:type :move :move 8 :to 9}
+                                    {:type :clear :move 8}]]
                           (if (valid-plan? @conn plan)
-                            (cycle (add-claw-moves plan))
+                            (cycle plan)
                             []))))))
 
 (defn draw []
