@@ -419,9 +419,7 @@
         plan (if (valid-plan? db plan)
                (add-claw-moves plan)
                [])]
-    (swap! app-state
-           #(assoc % :db0 db :plan plan :goal goal
-                   :db db :frame 0 :ops plan))))
+    (reset! app-state (reset-state {:db0 db :plan plan :goal goal}))))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame"
@@ -443,7 +441,8 @@
       (square! sq))
     (when (and (:x claw) (:y claw))
       (grip! claw))
-    (swap! app-state step-frame)))
+    (when (some? op)
+      (swap! app-state step-frame))))
 
 (q/defsketch cubes
   :title "Oh so many grey circles"
@@ -460,7 +459,18 @@
   (reify
     om/IRender
     (render [this]
-      (dom/div nil ""))))
+      (dom/div nil
+               (let [[sq tsq] (:goal @app-state)]
+                 (dom/span nil (str "Move " sq " to " tsq)))
+               (dom/br nil)
+               (dom/button #js {:onClick (fn [_]
+                                           (swap! app-state
+                                                  (fn [s]
+                                                    (assoc s :db (:db0 s)))))}
+                           "Reset")
+               (dom/button #js {:onClick (fn [_]
+                                           (swap! app-state reset-state))}
+                           "Start")))))
 
 (defn init []
   (om/root widget {:text "Hello world!"}
