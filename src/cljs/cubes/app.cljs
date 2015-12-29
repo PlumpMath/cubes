@@ -116,8 +116,8 @@
 
 (defn find-support
   "Returns the support for an x position, or nil if none is found"
-  [conn sq]
-  (some->> (db->squares @conn)
+  [db sq]
+  (some->> (db->squares db)
            (filter (partial sq-overlap? sq))
            (apply max-key sq->top)))
 
@@ -205,22 +205,34 @@
                     [[:db/add move :y 0]
                      [:db/add move :x (find-clear-space db (:side sq))]]))))
 
-(defn stack-sq!
-  "Stacks the new sq on top of the squares"
-  [conn sq]
-  (d/transact conn
-              (let [temp-id -1
-                    sq' (assoc sq :db/id temp-id)]
-                (concat [sq']
-                        (if-let [support-sq (find-support conn sq)]
-                          (stack-tx sq' support-sq)
-                          [[:db/add temp-id :y 0]])))))
+(defn apply-op!
+  "Returns the squares after the operation is applied"
+  [conn {:keys [move to] :as op}]
+  (d/transact conn (op->tx @conn op)))
 
-(defn stack-squares!
-  "Add n stacked squares to conn"
-  [conn n]
-  (doseq [sq (map (fn [_] (rand-square)) (range n))]
-    (stack-sq! conn sq)))
+(defn step-op
+  "Returns a new database as if the operation was applied"
+  [db op]
+  (d/db-with db (op->tx db op)))
+
+(defn stack-sq
+  "Stacks the new sq on top of the squares"
+  [db sq]
+  (d/db-with db (let [temp-id -1
+                      sq' (assoc sq :db/id temp-id)]
+                  (concat [sq']
+                          (if-let [support-sq (find-support db sq)]
+                            (stack-tx sq' support-sq)
+                            [[:db/add temp-id :y 0]])))))
+
+(defn stack-squares
+  "Add n stacked squares to db"
+  [db n]
+  (loop [db db
+         sqs (map (fn [_] (rand-square)) (range n))]
+    (if-let [sq (first sqs)]
+      (recur (stack-sq db sq) (rest sqs))
+      db)))
 
 (defmulti valid-op? (fn [_ op] (:type op)))
 
@@ -242,15 +254,6 @@
 (defmethod valid-op? :move [db {:keys [move to] :as op}]
   (and (sqs-exist? db op) (sq-clear? db move) (sq-clear? db to)))
 
-(defn apply-op!
-  "Returns the squares after the operation is applied"
-  [conn {:keys [move to] :as op}]
-  (d/transact conn (op->tx @conn op)))
-
-(defn step-op
-  "Returns a new database as if the operation was applied"
-  [db op]
-  (d/db-with db (op->tx db op)))
 
 ;; ======================================================================
 ;; Planning
@@ -348,7 +351,9 @@
 ;; Render State
 
 (defonce app-state
-  (atom {:conn nil
+  (atom {:db0 nil
+         :plan []
+         :db nil
          :ops []
          :frame 0}))
 
@@ -399,41 +404,46 @@
 ;; ======================================================================
 ;; Initialize and Render
 
+(defn reset-state [s]
+  (assoc s :db (:db0 s) :ops (:plan s) :frame 0))
+
 (defn setup! []
   (q/frame-rate frame-rate)
   (q/color-mode :rgb)
   (q/background 200)
   (let [schema {:supports {:db/cardinality :db.cardinality/many
                            :db/valueType :db.type/ref}}
-        conn (d/create-conn schema)]
-    (stack-squares! conn 10)
+        db (stack-squares (d/empty-db schema) 10)
+        goal [4 5]
+        plan (plan-moves goal db)
+        plan (if (valid-plan? db plan)
+               (add-claw-moves plan)
+               [])]
     (swap! app-state
-           #(assoc %
-                   :conn conn :frame 0
-                   :ops (let [plan [{:type :move :move 8 :to 10}
-                                    {:type :move :move 8 :to 9}
-                                    {:type :clear :move 8}]]
-                          (if (valid-plan? @conn plan)
-                            (cycle (add-claw-moves plan))
-                            []))))))
+           #(assoc % :db0 db :plan plan :goal goal
+                   :db db :frame 0 :ops plan))))
+
+(defn step-frame
+  "If there are any operations left it steps the state one frame"
+  [s]
+  (if-let [op (first (:ops s))]
+    (if (> 1 (:frame s))
+      (assoc s :frame (+ (:frame s) (/ 1 frame-rate)))
+      (cond-> s
+        true (assoc :frame 0 :ops (rest (:ops s)))
+        (some? op) (update :db #(step-op % op))))
+    s))
 
 (defn draw! []
   (clear-canvas!)
-  (let [{:keys [conn ops frame]} @app-state
+  (let [{:keys [db ops frame]} @app-state
         op (first ops)
-        {:keys [squares claw]} (state->render @conn op frame)]
+        {:keys [squares claw]} (state->render db op frame)]
     (doseq [sq squares]
       (square! sq))
     (when (and (:x claw) (:y claw))
       (grip! claw))
-    (swap! app-state
-           (fn [s]
-             (let [f (:frame s)]
-               (if (> 1 f)
-                 (assoc s :frame (+ f (/ 1 frame-rate)))
-                 (do (when (some? op)
-                       (apply-op! conn op))
-                     (assoc s :frame 0 :ops (rest (:ops s))))))))))
+    (swap! app-state step-frame)))
 
 (q/defsketch cubes
   :title "Oh so many grey circles"
