@@ -207,6 +207,11 @@
   (and (sq-overlap? a b)
        (= (:y a) (sq->top b))))
 
+;; goal is a over b  as [a b]
+(defn distance [goal db]
+  (+ (count (supported-by db (first goal)))
+     (count (supported-by db (second goal)))))
+
 (defn possible-ops
   "All the possible actions for a determined state"
   [db]
@@ -216,11 +221,6 @@
          (remove nil?)
          (map (fn [[x y]] {:type :move :move x :to y}))
          (concat (map (fn [sq] {:type :clear :move sq}) c-sqs)))))
-
-;; goal is a over b  as [a b]
-(defn distance [goal db]
-  (+ (count (supported-by db (first goal)))
-     (count (supported-by db (second goal)))))
 
 (defmulti valid-op? (fn [_ op] (:type op)))
 
@@ -264,7 +264,7 @@
   (some? (reduce maybe-step-op db plan)))
 
 ;; ======================================================================
-;; Quil
+;; Quil Helpers
 
 (defn clear-canvas! []
   (q/fill 192 192 192)
@@ -299,6 +299,9 @@
   [sq]
   (let [{:keys [x y side]} (xy->xy sq)]
     (claw! (+ x (/ side 2)) y)))
+
+;; ======================================================================
+;; Render State
 
 (defonce app-state
   (atom {:conn nil
@@ -346,7 +349,10 @@
     (->> (drop 1 (cycle plan))
          (mapcat add-claw-move plan))))
 
-(defn setup []
+;; ======================================================================
+;; Initialize and Render
+
+(defn setup! []
   (q/frame-rate frame-rate)
   (q/color-mode :rgb)
   (q/background 200)
@@ -364,7 +370,7 @@
                             (cycle (add-claw-moves plan))
                             []))))))
 
-(defn draw []
+(defn draw! []
   (clear-canvas!)
   (let [{:keys [conn ops frame]} @app-state
         op (first ops)
@@ -382,12 +388,12 @@
                        (apply-op! conn op))
                      (assoc s :frame 0 :ops (rest (:ops s))))))))))
 
-(q/defsketch example
+(q/defsketch cubes
   :title "Oh so many grey circles"
   :host "canvas"
   :settings #(q/smooth 2) ;; Turn on anti-aliasing
-  :setup setup
-  :draw draw
+  :setup setup!
+  :draw draw!
   :size grid-size)
 
 ;; ======================================================================
