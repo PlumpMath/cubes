@@ -49,7 +49,9 @@
   [{:keys [y side]}]
   (+ y side))
 
-(defn sq-clear? [db sq-id]
+(defn sq-clear?
+  "Checks if the sq is clear (if it's not supporting any other squares)"
+  [db sq-id]
   (empty? (d/q '[:find ?supports :in $ ?id
                  :where [?id :supports ?supports]]
                db
@@ -105,7 +107,9 @@
   {:pre [(number? id)]}
   (ent->map (d/entity db id)))
 
-(defn db->squares [db]
+(defn db->squares
+  "Coll with all the squares in db"
+  [db]
   (->> (d/q '[:find ?id :where [?id :x _]] db)
        (map first)
        (map (partial get-sq db))))
@@ -142,16 +146,22 @@
                          set)]
     (set/difference all-sqs support-sqs)))
 
-(defn stack-tx [sq target-sq]
+(defn stack-tx
+  "Tx data to stack sq on top of target-sq"
+  [sq target-sq]
   [[:db/add (:db/id target-sq) :supports (:db/id sq)]
    [:db/add (:db/id sq) :y (sq->top target-sq)]
    [:db/add (:db/id sq) :x (:x target-sq)]])
 
-(defn unsupport-tx [db sq]
+(defn unsupport-tx
+  "Tx data to clear sq from all of its supports"
+  [db sq]
   (mapv (fn [id] [:db/retract id :supports sq])
         (supported-by db sq)))
 
-(defmulti op->tx (fn [_ op] (:type op)))
+(defmulti op->tx
+  "Transforms an operation into the necessary tx data to be applied to db"
+  (fn [_ op] (:type op)))
 
 (defmethod op->tx :default [_ _] [])
 
@@ -266,14 +276,21 @@
 ;; ======================================================================
 ;; Quil Helpers
 
-(defn clear-canvas! []
+(defn clear-canvas!
+  "Draws a grey rectangle covering the whole canvas"
+  []
   (q/fill 192 192 192)
   (apply q/rect 0 0 grid-size))
 
-(defn xy->xy [sq]
+(defn xy->xy
+  "Coordinate transformation from regular cartesian to screen cartesian:
+   (x', y') = (x, H - y)"
+  [sq]
   (update sq :y #(- (first grid-size) (:side sq) %)))
 
-(defn sq-text! [sq]
+(defn sq-text!
+  "Paints text inside the square"
+  [sq]
   (q/stroke 0 0 0)
   (q/fill 0 0 0)
   (let [[x y] (sq->center sq)]
@@ -308,7 +325,10 @@
          :ops []
          :frame 0}))
 
-(defmulti state->render (fn [_ op _] (:type op)))
+(defmulti state->render
+  "Takes the state, an op, the current frame,
+  and returns what is necessary for rendering: claw and squares"
+  (fn [_ op _] (:type op)))
 
 (defmethod state->render :default [db _ _]
   {:squares (db->squares db)})
