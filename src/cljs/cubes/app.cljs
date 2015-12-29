@@ -207,16 +207,15 @@
   (and (sq-overlap? a b)
        (= (:y a) (sq->top b))))
 
-
-;; TODO: missing put on table
-(defn possible-actions
+(defn possible-ops
   "All the possible actions for a determined state"
   [db]
   (let [c-sqs (clear-sqs db)]
     (->> (for [x c-sqs y c-sqs]
            (when-not (= x y) [x y]))
          (remove nil?)
-         (map (fn [[x y]] {:type :move :move x :to y})))))
+         (map (fn [[x y]] {:type :move :move x :to y}))
+         (concat (map (fn [sq] {:type :clear :move sq}) c-sqs)))))
 
 ;; goal is a over b  as [a b]
 (defn distance [goal db]
@@ -234,14 +233,14 @@
   (and (sq-exist? db move)  (sq-exist? db to)))
 
 (defmethod valid-op? :clear [db op]
-  (sq-exist? db (:move op)))
+  (let [sq (get-sq db (:move op))]
+    (and (some? sq) (some? (find-clear-space db (:side sq))))))
 
 (defmethod valid-op? :claw [db op]
   (sqs-exist? db op))
 
 (defmethod valid-op? :move [db {:keys [move to] :as op}]
-  (and (sqs-exist? db op)
-       (and (sq-clear? db move) (sq-clear? db to))))
+  (and (sqs-exist? db op) (sq-clear? db move) (sq-clear? db to)))
 
 (defn apply-op!
   "Returns the squares after the operation is applied"
@@ -337,13 +336,13 @@
 
 (defn add-claw-moves
   "Add intermediate claw moves to the plan (for rendering)"
-  [ops]
-  (->> (drop 1 (cycle ops))
-       (map (fn [{:keys [to]} {:keys [move]}]
-              {:type :claw :move to :to move})
-            ops)
-       (interleave ops)
-       vec))
+  [plan]
+  (letfn [(add-claw-move [prev {:keys [move]}]
+            (let [to (:move prev)]
+              (cond-> [prev]
+                (not= to move) (conj {:type :claw :to move :move to}))))]
+    (->> (drop 1 (cycle plan))
+         (mapcat add-claw-move plan))))
 
 (defn setup []
   (q/frame-rate frame-rate)
@@ -360,7 +359,7 @@
                                     {:type :move :move 8 :to 9}
                                     {:type :clear :move 8}]]
                           (if (valid-plan? @conn plan)
-                            (cycle plan)
+                            (cycle (add-claw-moves plan))
                             []))))))
 
 (defn draw []
