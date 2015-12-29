@@ -252,14 +252,16 @@
   [db op]
   (d/db-with db (op->tx db op)))
 
+(defn maybe-step-op
+  "Step-op that checks if the op is valid, returns nil if not"
+  [db op]
+  (when (and (some? db) (valid-op? db op))
+    (step-op db op)))
+
 (defn valid-plan?
+  "Checks if the plan is valid by applying all the ops"
   [db plan]
-  (->> plan
-       (reduce (fn [db op]
-                 (when (and (some? db) (valid-op? db op))
-                   (step-op db op)))
-               db)
-       some?))
+  (some? (reduce maybe-step-op db plan)))
 
 ;; ======================================================================
 ;; Quil
