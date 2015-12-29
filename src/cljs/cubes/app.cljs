@@ -452,13 +452,14 @@
     (when (some? op)
       (swap! app-state step-frame))))
 
-(q/defsketch cubes
-  :title "Oh so many grey circles"
-  :host "canvas"
-  :settings #(q/smooth 2) ;; Turn on anti-aliasing
-  :setup setup!
-  :draw draw!
-  :size grid-size)
+(defn cubes-sketch! []
+  (q/sketch
+   :title "Oh so many grey circles"
+   :host "canvas"
+   :settings #(q/smooth 2) ;; Turn on anti-aliasing
+   :setup setup!
+   :draw draw!
+   :size grid-size))
 
 ;; ======================================================================
 ;; DOM Setup
@@ -468,18 +469,20 @@
     om/IRender
     (render [this]
       (dom/div nil
-               (let [[sq tsq] (:goal @app-state)]
-                 (dom/span nil (str "Move " sq " to " tsq)))
-               (dom/br nil)
-               (dom/button #js {:onClick (fn [_]
-                                           (swap! app-state
-                                                  (fn [s]
-                                                    (assoc s :db (:db0 s)))))}
-                           "Reset")
-               (dom/button #js {:onClick (fn [_]
-                                           (swap! app-state reset-state))}
-                           "Start")))))
+        (let [[sq tsq] (:goal data)]
+          (dom/span nil (str "Move " sq " to " tsq)))
+        (dom/br nil)
+        (dom/button #js {:onClick (fn [_]
+                                    (om/transact! data #(assoc % :db (:db0 %))))}
+                    "Reset")
+        (dom/button #js {:onClick (fn [_]
+                                    (om/transact! data reset-state))}
+                    "Start")
+        (dom/canvas #js {:id "canvas" :height 600 :widht 900})))
+    om/IDidMount
+    (did-mount [_]
+      (cubes-sketch!))))
 
 (defn init []
-  (om/root widget {:text "Hello world!"}
+  (om/root widget app-state
            {:target (. js/document (getElementById "container"))}))
