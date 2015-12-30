@@ -507,14 +507,15 @@
     om/IRender
     (render [this]
       (dom/div nil
-               (let [[sq tsq] (:goal data)]
-                 (dom/p nil (str "Move " sq " to " tsq)))
-               (dom/button #js {:onClick (fn [_]
-                                           (om/transact! data #(assoc % :db (:db0 %))))}
-                           "Reset")
-               (dom/button #js {:onClick (fn [_]
-                                           (om/transact! data update-plan))}
-                           "Start")
+               (dom/div nil
+                        (let [[sq tsq] (:goal data)]
+                          (dom/p nil (str "Move " sq " to " tsq)))
+                        (dom/button #js {:onClick (fn [_]
+                                                    (om/transact! data #(assoc % :db (:db0 %))))}
+                                    "Reset")
+                        (dom/button #js {:onClick (fn [_]
+                                                    (om/transact! data update-plan))}
+                                    "Start"))
                (om/build canvas {})))))
 
 (defn init []
