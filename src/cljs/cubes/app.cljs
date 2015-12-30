@@ -422,10 +422,11 @@
   (assoc s :db (:db0 s) :ops (:plan s) :frame 0))
 
 (defn goal->moves [db goal]
-  (let [plan (plan-moves goal db)]
-    (if (valid-plan? db plan)
-      (add-claw-moves plan)
-      [])))
+  (when (apply not= goal)
+    (let [plan (plan-moves goal db)]
+      (if (valid-plan? db plan)
+        (add-claw-moves plan)
+        []))))
 
 (defn update-plan
   "Updates the plan and static db to the current goal and db"
