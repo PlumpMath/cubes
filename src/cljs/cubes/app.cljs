@@ -217,16 +217,22 @@
     om/IRender
     (render [this]
       (dom/div nil
-               (dom/div nil
-                        (let [[sq tsq] (:goal data)]
-                          (dom/p nil (str "Move " sq " to " tsq)))
-                        (dom/button #js {:onClick (fn [_]
-                                                    (om/transact! data #(assoc % :db (:db0 %))))}
-                                    "Reset")
-                        (dom/button #js {:onClick (fn [_]
-                                                    (om/transact! data update-plan))}
-                                    "Start"))
-               (om/build canvas {})))))
+        (dom/div nil
+          (let [[sq tsq] (:goal data)]
+            (dom/p nil (str "Move " sq " to " tsq)))
+          (dom/button #js {:onClick (fn [_]
+                                      (om/transact! data #(assoc % :db (:db0 %))))}
+                      "Reset")
+          (dom/button #js {:onClick (fn [_]
+                                      (om/transact! data update-plan))}
+                      "Start"))
+        (om/build canvas {})
+        (apply dom/ul nil
+          (map #(dom/li nil
+                  (if (= (first (:ops data)) %)
+                    (dom/b nil (sq/op->sentence %))
+                    (sq/op->sentence %)))
+               (:plan data)))))))
 
 (defn init []
   (om/root widget app-state

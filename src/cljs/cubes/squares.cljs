@@ -335,8 +335,39 @@
   (let [sqs (sq-supports db sq)]
     (mapv (fn [sq] {:type :get-rid-of :move sq}) (reverse sqs))))
 
+;; FIX: the ops are all expanded with the same db.
+;; use reduce sequentially
 (defn expand-ops [db ops]
   (loop [ops ops]
     (if (every? #(contains? base-ops (:type %)) ops)
       ops
       (recur (mapcat (partial expand-op db) ops)))))
+
+(defmulti op->sentence :type)
+
+(defmethod op->sentence :default [op]
+  (str (name (:type op)) " operation"))
+
+(defmethod op->sentence :get-rid-of [{:keys [move]}]
+  (str "Get rid of " move))
+
+(defmethod op->sentence :put [{:keys [move to]}]
+  (str "Put " move " on " to))
+
+(defmethod op->sentence :move [{:keys [move to]}]
+  (str "Move " move " to " to))
+
+(defmethod op->sentence :claw [{:keys [move to]}]
+  (str "Move the claw from " move " to " to))
+
+(defmethod op->sentence :grasp [{:keys [move]}]
+  (str "Grasp " move))
+
+(defmethod op->sentence :clear-top [{:keys [sq]}]
+  (str "Clear " sq "'s top"))
+
+(defmethod op->sentence :find-space [{:keys [sq]}]
+  (str "Find space for " sq))
+
+(defmethod op->sentence :find-space [{:keys [sq]}]
+  (str "Find space for " sq))
