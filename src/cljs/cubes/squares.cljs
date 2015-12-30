@@ -111,10 +111,16 @@
                [?b :supports ?x]
                [on-top ?a ?x]]])
 
-(defn sq-supports [db sq]
-  (map first (d/q '[:find ?id :in $ % ?sq
-                    :where [on-top ?id ?sq]]
-                  db on-top sq)))
+(defn sq-supports
+  "All squares a particular square supports"
+  [db sq]
+  (letfn [(y [sq]
+            (ffirst (d/q '[:find ?y :in $ ?sq :where [?sq :y ?y]] db sq)))]
+    (->> (d/q '[:find ?id :in $ % ?sq
+                :where [on-top ?id ?sq]]
+              db on-top sq)
+         (map first)
+         (sort-by y))))
 
 (defn supported-by
   "All the squares that support sq, where y-sqs is indexed by sq->top"
@@ -171,7 +177,7 @@
                    (every? #(not (sq-overlap? {:x x :side width} %)) base-sqs)))
          first)))
 
-(defmethod op->tx :clear
+(defmethod op->tx :get-rid-of
   [db {:keys [move]}]
   (let [sq (get-sq db move)]
     (cond
@@ -219,7 +225,7 @@
 (defn sqs-exist? [db {:keys [move to]}]
   (and (sq-exist? db move)  (sq-exist? db to)))
 
-(defmethod valid-op? :clear [db op]
+(defmethod valid-op? :get-rid-of [db op]
   (let [sq (get-sq db (:move op))]
     (and (some? sq) (some? (find-clear-space db (:side sq))))))
 
@@ -277,7 +283,7 @@
            (when-not (= x y) [x y]))
          (remove nil?)
          (map (fn [[x y]] {:type :move :move x :to y}))
-         (concat (map (fn [sq] {:type :clear :move sq}) c-sqs)))))
+         (concat (map (fn [sq] {:type :get-rid-of :move sq}) c-sqs)))))
 
 (defn distance [[sq tsq] db]
   (if (done? [sq tsq] db)
@@ -294,3 +300,34 @@
                            (sort-by (comp (partial distance goal) second)))]
               (let [[op db'] (first ops)]
                 (recur db' (conj plan op) (inc n)))))))
+
+;; ======================================================================
+;; Advanced planning
+
+;; TODO: get-rid-of could be implemented in terms of move
+(def base-ops #{:move :claw :get-rid-of})
+
+(defmulti expand-op (fn [_ op] (:type op)))
+
+(defmethod expand-op :default [_ op] [op])
+
+(defmethod expand-op :put [_ {:keys [to move]}]
+  [{:type :find-space :sq to}
+   {:type :grasp :move move}
+   {:type :move :move move :to to}])
+
+(defmethod expand-op :find-space [_ {:keys [sq]}]
+  [{:type :clear-top :sq sq}])
+
+(defmethod expand-op :grasp [_ {:keys [move]}]
+  [{:type :clear-top :sq move}])
+
+(defmethod expand-op :clear-top [db {:keys [sq]}]
+  (let [sqs (sq-supports db sq)]
+    (mapv (fn [sq] {:type :get-rid-of :move sq}) (reverse sqs))))
+
+(defn expand-ops [db ops]
+  (loop [ops ops]
+    (if (every? #(contains? base-ops (:type %)) ops)
+      ops
+      (recur (mapcat (partial expand-op db) ops)))))

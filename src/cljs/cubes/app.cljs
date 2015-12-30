@@ -98,7 +98,7 @@
      :squares (sq/db->squares (d/db-with db [[:db/add id :x x]
                                              [:db/add id :y y]]))}))
 
-(defmethod state->render :clear [db op f]
+(defmethod state->render :get-rid-of [db op f]
   (let [sq (sq/get-sq db (:move op))
         fake-sq {:side (:side sq) :y 0 :x (sq/find-clear-space db (:side sq))}
         {:keys [x y db/id] :as sq'} (sq->target sq fake-sq f)]
@@ -125,10 +125,13 @@
 
 (defn goal->moves [db goal]
   (when (apply not= goal)
-    (let [plan (sq/plan-moves goal db)]
+    (let [plan (sq/expand-ops db [{:type :put
+                                   :move (first goal) :to (second goal)}])]
       (if (sq/valid-plan? db plan)
         (add-claw-moves plan)
-        []))))
+        (do (println "NOT VALID")
+            (println plan)
+            [])))))
 
 (defn update-plan
   "Updates the plan and static db to the current goal and db"
