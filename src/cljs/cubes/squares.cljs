@@ -2,6 +2,11 @@
   (:require [clojure.set :as set]
             [datascript.core :as d]))
 
+(defn screen-size [db]
+  (first (d/q '[:find ?w ?h
+                :where [?s :screen-width ?w] [?s :screen-height ?h]]
+              db)))
+
 (defn rand-rgb []
   {:r (rand-int 255) :g (rand-int 255) :b (rand-int 255)})
 
@@ -166,7 +171,8 @@
 (defn find-clear-space
   "Coordinate that has an adjacent clear space (length: width)"
   [db width]
-  (let [base-sqs (->> db
+  (let [screen-width (first (screen-size db))
+        base-sqs (->> db
                       (d/q '[:find (pull ?i [:db/id :side :x])
                              :where [?i :y 0]])
                       (mapcat identity))]
@@ -174,7 +180,9 @@
          (map #(+ (:side %) (:x %)))
          (concat [0])
          (filter (fn [x]
-                   (every? #(not (sq-overlap? {:x x :side width} %)) base-sqs)))
+                   (and (< x screen-width)
+                        (every? #(not (sq-overlap? {:x x :side width} %))
+                                base-sqs))))
          first)))
 
 (defmethod op->tx :get-rid-of
@@ -208,9 +216,10 @@
 
 (defn stack-squares
   "Add n stacked squares to db"
-  [db n max-l]
+  [db n]
   (loop [db db
-         sqs (map (fn [_] (rand-square max-l)) (range n))]
+         sqs (let [screen-width (first (screen-size db))]
+               (map (fn [_] (rand-square screen-width)) (range n)))]
     (if-let [sq (first sqs)]
       (recur (stack-sq db sq) (rest sqs))
       db)))

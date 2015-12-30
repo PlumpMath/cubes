@@ -146,7 +146,10 @@
   (q/background 200)
   (let [schema {:supports {:db/cardinality :db.cardinality/many
                            :db/valueType :db.type/ref}}
-        db (sq/stack-squares (d/empty-db schema) 10 (first grid-size))]
+        db (-> (d/empty-db schema)
+               (d/db-with [[:db/add -1 :screen-width (first grid-size)]
+                           [:db/add -1 :screen-height (second grid-size)]])
+               (sq/stack-squares 10))]
     (reset! app-state (reset-state {:db0 db :plan [] :goal []}))))
 
 (defn step-frame
