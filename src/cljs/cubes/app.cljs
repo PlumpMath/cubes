@@ -411,8 +411,9 @@
             (let [to (:move prev)]
               (cond-> [prev]
                 (not= to move) (conj {:type :claw :to move :move to}))))]
-    (->> (drop 1 (cycle plan))
-         (mapcat add-claw-move plan))))
+    (concat (->> (drop 1 (cycle plan))
+                 (mapcat add-claw-move (drop-last 1 plan)))
+            [(last plan)])))
 
 ;; ======================================================================
 ;; Initialize and Render
