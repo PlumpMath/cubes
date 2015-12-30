@@ -3,7 +3,8 @@
             [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [quil.core :as q :include-macros true]
-            [datascript.core :as d]))
+            [datascript.core :as d]
+            [goog.style :as gstyle]))
 
 (enable-console-print!)
 
@@ -248,7 +249,8 @@
 
 (defn coords->sq
   "Returns the square the coordinates belong to (if any)"
-  [db x y]
+  [db [x y]]
+  {:pre [(d/db? db)]}
   (let [between? '[[[between ?x0 ?side ?x]
                     [(< ?x0 ?x)]
                     [(+ ?x0 ?side) ?x1]
@@ -259,9 +261,9 @@
                   [?id :side ?side]
                   [between ?x0 ?side ?x]
                   [between ?y0 ?side ?y]]]]
-    (d/q '[:find ?sq :in $ % ?x ?y
-           :where [in-sq ?x ?y ?sq]]
-         db (concat between? in-sq?) x y)))
+    (ffirst (d/q '[:find ?sq :in $ % ?x ?y
+                      :where [in-sq ?x ?y ?sq]]
+                    db (concat between? in-sq?) x y))))
 
 ;; ======================================================================
 ;; Planning
@@ -325,6 +327,9 @@
    (x', y') = (x, H - y)"
   [sq]
   (update sq :y #(- (first grid-size) (:side sq) %)))
+
+;; In this case the inverse is the same
+(def xy<-xy xy->xy)
 
 (defn sq-text!
   "Paints text inside the square"
@@ -415,19 +420,27 @@
 (defn reset-state [s]
   (assoc s :db (:db0 s) :ops (:plan s) :frame 0))
 
+(defn goal->moves [db goal]
+  (let [plan (plan-moves goal db)]
+    (if (valid-plan? db plan)
+      (add-claw-moves plan)
+      [])))
+
+(defn update-plan
+  "Updates the plan and static db to the current goal and db"
+  [s]
+  (-> s
+      (assoc :db0 (:db s) :plan (goal->moves (:db s) (:goal s)))
+      reset-state))
+
 (defn setup! []
   (q/frame-rate frame-rate)
   (q/color-mode :rgb)
   (q/background 200)
   (let [schema {:supports {:db/cardinality :db.cardinality/many
                            :db/valueType :db.type/ref}}
-        db (stack-squares (d/empty-db schema) 10)
-        goal [4 5]
-        plan (plan-moves goal db)
-        plan (if (valid-plan? db plan)
-               (add-claw-moves plan)
-               [])]
-    (reset! app-state (reset-state {:db0 db :plan plan :goal goal}))))
+        db (stack-squares (d/empty-db schema) 10)]
+    (reset! app-state (reset-state {:db0 db :plan [] :goal []}))))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame"
@@ -462,26 +475,47 @@
    :size grid-size))
 
 ;; ======================================================================
-;; DOM Setup
+;; DOM
+
+(defn click->sq [db e]
+  (letfn [(->xy [c]
+            (map int [(.-x c) (.-y c)]))]
+    (let [t-coords (gstyle/getClientPosition (.-target e))
+          e-coords (gstyle/getClientPosition e)
+          [x y] (map - (->xy e-coords) (->xy t-coords))
+          {:keys [x y]} (xy<-xy {:x x :y y :side 0})]
+      (coords->sq db [x y]))))
+
+(let [c (atom true)
+      c (fn [] (swap! c not))]
+  (defn click-handler [e]
+    (when-let [sq (click->sq (:db @app-state) e)]
+      (swap! app-state #(assoc-in % [:goal (if (c) 1 0)] sq)))))
+
+(defn canvas [data owner]
+  (reify
+    om/IRender
+    (render [_]
+      (dom/canvas #js {:id "canvas" :height 600 :widht 900
+                       :onClick click-handler}))
+    om/IDidMount
+    (did-mount [_]
+      (cubes-sketch!))))
 
 (defn widget [data owner]
   (reify
     om/IRender
     (render [this]
       (dom/div nil
-        (let [[sq tsq] (:goal data)]
-          (dom/span nil (str "Move " sq " to " tsq)))
-        (dom/br nil)
-        (dom/button #js {:onClick (fn [_]
-                                    (om/transact! data #(assoc % :db (:db0 %))))}
-                    "Reset")
-        (dom/button #js {:onClick (fn [_]
-                                    (om/transact! data reset-state))}
-                    "Start")
-        (dom/canvas #js {:id "canvas" :height 600 :widht 900})))
-    om/IDidMount
-    (did-mount [_]
-      (cubes-sketch!))))
+               (let [[sq tsq] (:goal data)]
+                 (dom/p nil (str "Move " sq " to " tsq)))
+               (dom/button #js {:onClick (fn [_]
+                                           (om/transact! data #(assoc % :db (:db0 %))))}
+                           "Reset")
+               (dom/button #js {:onClick (fn [_]
+                                           (om/transact! data update-plan))}
+                           "Start")
+               (om/build canvas {})))))
 
 (defn init []
   (om/root widget app-state
