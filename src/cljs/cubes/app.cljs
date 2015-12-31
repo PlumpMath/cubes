@@ -123,10 +123,12 @@
 (defn reset-state [s]
   (assoc s :db (:db0 s) :ops (:plan s) :frame 0))
 
+(defn goal->op [[move to]]
+  {:type :put :move move :to to})
+
 (defn goal->moves [db goal]
   (when (apply not= goal)
-    (let [plan (sq/expand-ops db [{:type :put
-                                   :move (first goal) :to (second goal)}])]
+    (let [plan (sq/expand-ops db [(goal->op goal)])]
       (if (sq/valid-plan? db plan)
         (add-claw-moves plan)
         (do (println "NOT VALID")
@@ -212,6 +214,58 @@
     (did-mount [_]
       (cubes-sketch!))))
 
+(defn icon-button [{:keys [icon-class title]} owner {:keys [click-fn]}]
+  (om/component
+    (dom/i #js {:className (str icon-class " fa clickable")
+                :title title
+                :onClick (if (fn? click-fn)
+                           click-fn
+                           identity)})))
+
+(declare list-ops)
+
+(defn op-item [{:keys [selected op ops]} owner {:keys [click-fn] :as opts}]
+  (reify
+    om/IInitState
+    (init-state [_] {:expand? true})
+    om/IRenderState
+    (render-state [_ {:keys [expand?]}]
+      (let [selected? (contains? selected op)]
+        (dom/li #js {:className "file-item"}
+          (dom/span #js {:className (str "clickable "
+                                      (if selected?
+                                        "file-item__text--activated"
+                                        "file-item__text"))
+                         :onClick (partial click-fn op)
+                         :title (if selected?
+                                  "Unselect directory"
+                                  "Select directory")}
+            (sq/op->sentence op))
+          (when-not (empty? ops)
+            (om/build icon-button
+              {:title "Expand directory"
+               :icon-class (str "fa-chevron-down "
+                             (if expand?
+                               "expand-icon--active"
+                               "expand-icon"))}
+              {:opts {:click-fn (fn [_]
+                                  (om/update-state! owner :expand? not))}}))
+          (dom/div #js {:className "divider"} nil)
+          (when expand?
+            (om/build list-ops {:op op :ops ops} {:opts opts})))))))
+
+(defn list-ops [{:keys [op ops]} owner opts]
+  (om/component
+   (apply dom/ul #js {:className "folder-list"}
+     (map-indexed
+       (fn [i v]
+         (cond
+           (vector? v)
+           (let [[op ops] v]
+             (om/build op-item {:op op :ops ops} {:opts opts}))
+           :else (om/build op-item {:op v :ops []} {:opts opts})))
+       ops))))
+
 (defn widget [data owner]
   (reify
     om/IRender
@@ -227,12 +281,11 @@
                                       (om/transact! data update-plan))}
                       "Start"))
         (om/build canvas {})
-        (apply dom/ul nil
-          (map #(dom/li nil
-                  (if (= (first (:ops data)) %)
-                    (dom/b nil (sq/op->sentence %))
-                    (sq/op->sentence %)))
-               (:plan data)))))))
+        (let [op (goal->op (:goal data))
+              db (:db0 @app-state)]
+          (when (and (d/db? db) (sq/valid-op? db op))
+            (let [[op ops] (sq/expand-tree db op)]
+              (om/build list-ops {:op op :ops ops}))))))))
 
 (defn init []
   (om/root widget app-state

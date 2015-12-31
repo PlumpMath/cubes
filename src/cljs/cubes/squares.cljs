@@ -238,11 +238,12 @@
   (let [sq (get-sq db (:move op))]
     (and (some? sq) (some? (find-clear-space db (:side sq))))))
 
-(defmethod valid-op? :claw [db op]
-  (sqs-exist? db op))
+(defmethod valid-op? :claw [db op] (sqs-exist? db op))
 
 (defmethod valid-op? :move [db {:keys [move to] :as op}]
   (and (sqs-exist? db op) (sq-clear? db move) (sq-clear? db to)))
+
+(defmethod valid-op? :put [db op] (sqs-exist? db op))
 
 (defn coords->sq
   "Returns the square the coordinates belong to (if any)"
@@ -335,13 +336,30 @@
   (let [sqs (sq-supports db sq)]
     (mapv (fn [sq] {:type :get-rid-of :move sq}) (reverse sqs))))
 
+(defn base-op? [op]
+  (contains? base-ops (:type op)))
+
+(defn base-ops? [ops]
+  (every? base-op? ops))
+
 ;; FIX: the ops are all expanded with the same db.
 ;; use reduce sequentially
 (defn expand-ops [db ops]
   (loop [ops ops]
-    (if (every? #(contains? base-ops (:type %)) ops)
+    (if (base-ops? ops)
       ops
       (recur (mapcat (partial expand-op db) ops)))))
+
+(defn expand-tree* [db [op ops]]
+  (cond
+    (base-ops? ops) [op ops]
+    :else [op (mapv #(expand-tree* db [% (expand-op db %)]) ops)]))
+
+(defn expand-tree [db op]
+  (expand-tree* db [op (expand-op db op)]))
+
+;; ======================================================================
+;; Language
 
 (defmulti op->sentence :type)
 
