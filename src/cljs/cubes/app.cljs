@@ -44,8 +44,8 @@
 (defn square!
   "Draws a square in the screen"
   [sq]
-  (let [{:keys [x y side] :as sq'} (xy->xy sq)]
-    (apply q/fill (sq/sq->rgb sq'))
+  (let [{:keys [x y side rgb] :as sq'} (xy->xy sq)]
+    (apply q/fill rgb)
     (q/rect x y side side)
     (sq-text! sq')))
 

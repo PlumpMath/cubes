@@ -8,15 +8,13 @@
               db)))
 
 (defn rand-rgb []
-  {:r (rand-int 255) :g (rand-int 255) :b (rand-int 255)})
-
-(defn sq->rgb [sq]
-  [(:r sq) (:g sq) (:b sq)])
+  [(rand-int 255) (rand-int 255) (rand-int 255)])
 
 (defn rand-square [max-x]
   (let [side 40]
-    (merge {:side side :y 0 :x (rand-int (- max-x side))}
-           (rand-rgb))))
+    {:side side
+     :y 0 :x (rand-int (- max-x side))
+     :rgb (rand-rgb)}))
 
 (defn overlap?
   "Checks if two integer intervals overlap"
