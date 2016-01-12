@@ -257,14 +257,13 @@
 (defn list-ops [{:keys [op ops]} owner opts]
   (om/component
    (apply dom/ul #js {:className "folder-list"}
-     (map-indexed
-       (fn [i v]
-         (cond
-           (vector? v)
-           (let [[op ops] v]
-             (om/build op-item {:op op :ops ops} {:opts opts}))
-           :else (om/build op-item {:op v :ops []} {:opts opts})))
-       ops))))
+          (map-indexed
+           (fn [i v]
+             (cond
+               (vector? v) (let [[op ops] v]
+                             (om/build op-item {:op op :ops ops} {:opts opts}))
+               :else (om/build op-item {:op v :ops []} {:opts opts})))
+           ops))))
 
 (defn widget [data owner]
   (reify

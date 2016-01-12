@@ -258,8 +258,8 @@
                   [between ?x0 ?side ?x]
                   [between ?y0 ?side ?y]]]]
     (ffirst (d/q '[:find ?sq :in $ % ?x ?y
-                      :where [in-sq ?x ?y ?sq]]
-                    db (concat between? in-sq?) x y))))
+                   :where [in-sq ?x ?y ?sq]]
+                 db (concat between? in-sq?) x y))))
 
 ;; ======================================================================
 ;; Planning
