@@ -1,5 +1,5 @@
 (ns cubes.app
-  (:require [om.core :as om :include-macros true]
+  (:require [om.next :as om :refer-macros [defui]]
             [om.dom :as dom :include-macros true]
             [quil.core :as q :include-macros true]
             [datascript.core :as d]
@@ -68,9 +68,16 @@
 (defonce app-state
   (atom {:db0 nil
          :plan []
-         :db nil
+         :goal [1 2]
+         :db []
          :ops []
          :frame 0}))
+
+(defn read
+  [{:keys [state] :as env} key params]
+  (if-let [[_ value] (find @state key)]
+    {:value value}
+    {:value :not-found}))
 
 (defmulti state->render
   "Takes the state, an op, the current frame,
@@ -189,103 +196,147 @@
 ;; ======================================================================
 ;; DOM
 
-(defn click->sq [db e]
+(defn click->[e])
+(defn click->coords
+  "Finds in which square was the click made (if any)"
+  [e]
   (letfn [(->xy [c]
             (map int [(.-x c) (.-y c)]))]
     (let [t-coords (gstyle/getClientPosition (.-target e))
           e-coords (gstyle/getClientPosition e)
           [x y] (map - (->xy e-coords) (->xy t-coords))
           {:keys [x y]} (xy<-xy {:x x :y y :side 0})]
-      (sq/coords->sq db [x y]))))
+      [x y])))
 
+
+(defmulti mutate om/dispatch)
+
+(defmethod mutate :default [_ _ _] {:value []})
+
+;; TODO: transform into Actions
 (let [c (atom true)
       c (fn [] (swap! c not))]
-  (defn click-handler [e]
-    (when-let [sq (click->sq (:db @app-state) e)]
-      (swap! app-state #(assoc-in % [:goal (if (c) 1 0)] sq)))))
+  (defmethod mutate `square/click
+    [{:keys [state]} key {:keys [coords]}]
+    {:value {:keys [:goal]}
+     :action (fn []
+               (swap! state #(when-let [sq (sq/coords->sq (:db %) coords)]
+                               (assoc-in % [:goal (if (c) 1 0)] sq))))}))
 
-(defn canvas [data owner]
-  (reify
-    om/IRender
-    (render [_]
-      (dom/canvas #js {:id "canvas" :height 600 :widht 900
-                       :onClick click-handler}))
-    om/IDidMount
-    (did-mount [_]
-      (cubes-sketch!))))
+(defmethod mutate `square/reset
+  [{:keys [state]} key params]
+  {:value {:keys [:goal]}
+   :action (fn [] (swap! state #(assoc % :db (:db0 %))))})
 
-(defn icon-button [{:keys [icon-class title]} owner {:keys [click-fn]}]
-  (om/component
-    (dom/i #js {:className (str icon-class " fa clickable")
-                :title title
-                :onClick (if (fn? click-fn)
-                           click-fn
-                           identity)})))
+(defmethod mutate `square/start
+  [{:keys [state]} key params]
+  {:value {:keys [:goal]}
+   :action (fn [] (swap! state update-plan))})
 
-(declare list-ops)
+(defui Canvas
+  static om/IQuery
+  (query [_] '[:db])
+  Object
+  (render [this]
+          (let [{:keys [db]} (om/props this)]
+            (dom/canvas #js {:id "canvas" :height 600 :widht 900
+                             :onClick (fn [e]
+                                        (when-let [coords (click->coords e)]
+                                          (om/transact! this `[(square/click {:coords ~coords})])))})))
+  (componentDidMount [_]
+             (cubes-sketch!)))
 
-(defn op-item [{:keys [selected op ops]} owner {:keys [click-fn] :as opts}]
-  (reify
-    om/IInitState
-    (init-state [_] {:expand? true})
-    om/IRenderState
-    (render-state [_ {:keys [expand?]}]
-      (let [selected? (contains? selected op)]
-        (dom/li #js {:className "file-item"}
-          (dom/span #js {:className (str "clickable "
-                                      (if selected?
-                                        "file-item__text--activated"
-                                        "file-item__text"))
-                         :onClick (partial click-fn op)
-                         :title (if selected?
-                                  "Unselect directory"
-                                  "Select directory")}
-            (sq/op->sentence op))
-          (when-not (empty? ops)
-            (om/build icon-button
-              {:title "Expand directory"
-               :icon-class (str "fa-chevron-down "
-                             (if expand?
-                               "expand-icon--active"
-                               "expand-icon"))}
-              {:opts {:click-fn (fn [_]
-                                  (om/update-state! owner :expand? not))}}))
-          (dom/div #js {:className "divider"} nil)
-          (when expand?
-            (om/build list-ops {:op op :ops ops} {:opts opts})))))))
+(def canvas (om/factory Canvas))
 
-(defn list-ops [{:keys [op ops]} owner opts]
-  (om/component
-   (apply dom/ul #js {:className "folder-list"}
-          (map-indexed
-           (fn [i v]
-             (cond
-               (vector? v) (let [[op ops] v]
-                             (om/build op-item {:op op :ops ops} {:opts opts}))
-               :else (om/build op-item {:op v :ops []} {:opts opts})))
-           ops))))
+(defui Icon
+  Object
+  (render [this]
+          (let [{:keys [icon-class title click-fn]} (om/props this)]
+            (dom/i #js {:className (str icon-class " fa clickable")
+                        :title title
+                        :onClick (if (fn? click-fn)
+                                   click-fn
+                                   identity)}))))
 
-(defn widget [data owner]
-  (reify
-    om/IRender
-    (render [this]
-      (dom/div nil
-        (dom/div nil
-          (let [[sq tsq] (:goal data)]
-            (dom/p nil (str "Move " sq " to " tsq)))
-          (dom/button #js {:onClick (fn [_]
-                                      (om/transact! data #(assoc % :db (:db0 %))))}
-                      "Reset")
-          (dom/button #js {:onClick (fn [_]
-                                      (om/transact! data update-plan))}
-                      "Start"))
-        (om/build canvas {})
-        (let [op (goal->op (:goal data))
-              db (:db0 @app-state)]
-          (when (and (d/db? db) (sq/valid-op? db op))
-            (let [[op ops] (sq/expand-tree db op)]
-              (om/build list-ops {:op op :ops ops}))))))))
+(def icon (om/factory Icon))
+
+(declare operations)
+
+;; TODO: click-fn
+(defui Operation
+  static om/IQuery
+  (query [_] '[:selected :op :ops])
+  Object
+  (init-state [_] {:expand? true})
+  (render-state [this {:keys [expand?]}]
+                (let [{:keys [selected op ops]} (om/props this)
+                      selected? (contains? selected op)]
+                  (dom/li #js {:className "file-item"}
+                          (dom/span #js {:className (str "clickable "
+                                                         (if selected?
+                                                           "file-item__text--activated"
+                                                           "file-item__text"))
+                                         :title (if selected?
+                                                  "Unselect directory"
+                                                  "Select directory")}
+                                    (sq/op->sentence op))
+                          (when-not (empty? ops)
+                            (icon
+                             {:title "Expand directory"
+                              :icon-class (str "fa-chevron-down "
+                                               (if expand?
+                                                 "expand-icon--active"
+                                                 "expand-icon"))}
+                             :click-fn (fn [_]
+                                         ;; expand
+                                         )))
+                          (dom/div #js {:className "divider"} nil)
+                          (when expand?
+                            (operations {:op op :ops ops}))))))
+
+(def operation (om/factory Operation))
+
+(defui Operations
+  Object
+  (render [this]
+   (let [{:keys [op ops]} (om/props this)]
+     (apply dom/ul #js {:className "folder-list"}
+            (map-indexed
+             (fn [i v]
+               (cond
+                 (vector? v) (let [[op ops] v]
+                               (operation {:op op :ops ops}))
+                 :else (operation {:op v :ops []})))
+             ops)))))
+
+(def operations (om/factory Operations))
+
+(defui Widget
+  static om/IQuery
+  (query [_] '[:goal :db0 :db])
+  Object
+  (render [this]
+          (let [{:keys [goal db0 db] :as data} (om/props this)]
+            (dom/div nil
+                     (dom/div nil
+                              (let [[sq tsq] goal]
+                                (dom/p nil (str "Move " sq " to " tsq)))
+                              (dom/button #js {:onClick (fn [_]
+                                                          (om/transact! this '[(square/reset)]))}
+                                          "Reset")
+                              (dom/button #js {:onClick (fn [_]
+                                                          (om/transact! this '[(square/start)]))}
+                                          "Start"))
+                     (canvas {:db db})
+                     (let [op (goal->op goal)
+                           db db0]
+                       (when (and (d/db? db) (sq/valid-op? db op))
+                         (let [[op ops] (sq/expand-tree db op)]
+                           (operations {:op op :ops ops}))))))))
+
+(def reconciler
+  (om/reconciler {:state app-state
+                  :parser (om/parser {:read read :mutate mutate})}))
 
 (defn init []
-  (om/root widget app-state
-           {:target (. js/document (getElementById "container"))}))
+  (om/add-root! reconciler Widget (. js/document (getElementById "container"))))

@@ -7,7 +7,7 @@
                  [pandeiro/boot-http        "0.6.3"      :scope "test"]
                  [crisptrutski/boot-cljs-test "0.2.1-SNAPSHOT" :scope "test"]
                  [org.clojure/clojurescript "1.7.170"]
-                 [org.omcljs/om "0.9.0"]
+                 [org.omcljs/om "1.0.0-alpha22"]
                  [datascript "0.13.3"]
                  [quil "2.3.0"]])
 
