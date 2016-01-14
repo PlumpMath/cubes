@@ -68,6 +68,7 @@
 (defonce app-state
   (atom {:db0 nil
          :plan []
+         :tree []
          :goal [1 2]
          :db []
          :ops []
@@ -147,6 +148,7 @@
   [s]
   (-> s
       (assoc :db0 (:db s) :plan (goal->moves (:db s) (:goal s)))
+      (assoc :tree (sq/expand-tree (:db s) (goal->op (:goal s))))
       reset-state))
 
 (defn setup! []
@@ -159,7 +161,7 @@
                (d/db-with [[:db/add -1 :screen-width (first grid-size)]
                            [:db/add -1 :screen-height (second grid-size)]])
                (sq/stack-squares 10))]
-    (reset! app-state (reset-state {:db0 db :plan [] :goal []}))))
+    (reset! app-state (reset-state {:db0 db :plan [] :goal [] :tree []}))))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame"
@@ -210,15 +212,15 @@
 
 (defmethod mutate :default [_ _ _] {:value []})
 
-;; TODO: transform into Actions
 (let [c (atom true)
       c (fn [] (swap! c not))]
   (defmethod mutate `square/click
     [{:keys [state]} key {:keys [coords]}]
     {:value {:keys [:goal]}
      :action (fn []
-               (swap! state #(when-let [sq (sq/coords->sq (:db %) coords)]
-                               (assoc-in % [:goal (if (c) 1 0)] sq))))}))
+               (swap! state #(if-let [sq (sq/coords->sq (:db %) coords)]
+                               (assoc-in % [:goal (if (c) 1 0)] sq)
+                               %)))}))
 
 (defmethod mutate `square/reset
   [{:keys [state]} key params]
@@ -235,13 +237,15 @@
   (query [_] '[:db])
   Object
   (render [this]
-          (let [{:keys [db]} (om/props this)]
-            (dom/canvas #js {:id "canvas" :height 600 :widht 900
-                             :onClick (fn [e]
-                                        (when-let [coords (click->coords e)]
-                                          (om/transact! this `[(square/click {:coords ~coords})])))})))
+    (let [{:keys [db]} (om/props this)]
+      (dom/canvas #js {:id "canvas" :height 600 :widht 900
+                       :onClick
+                       (fn [e]
+                         (when-let [coords (click->coords e)]
+                           (om/transact! this
+                                         `[(square/click {:coords ~coords})])))})))
   (componentDidMount [_]
-             (cubes-sketch!)))
+    (cubes-sketch!)))
 
 (def canvas (om/factory Canvas))
 
@@ -264,32 +268,30 @@
   static om/IQuery
   (query [_] '[:selected :op :ops])
   Object
-  (init-state [_] {:expand? true})
-  (render-state [this {:keys [expand?]}]
-                (let [{:keys [selected op ops]} (om/props this)
-                      selected? (contains? selected op)]
-                  (dom/li #js {:className "file-item"}
-                          (dom/span #js {:className (str "clickable "
-                                                         (if selected?
-                                                           "file-item__text--activated"
-                                                           "file-item__text"))
-                                         :title (if selected?
-                                                  "Unselect directory"
-                                                  "Select directory")}
-                                    (sq/op->sentence op))
-                          (when-not (empty? ops)
-                            (icon
-                             {:title "Expand directory"
-                              :icon-class (str "fa-chevron-down "
-                                               (if expand?
-                                                 "expand-icon--active"
-                                                 "expand-icon"))}
-                             :click-fn (fn [_]
-                                         ;; expand
-                                         )))
-                          (dom/div #js {:className "divider"} nil)
-                          (when expand?
-                            (operations {:op op :ops ops}))))))
+  (getInitialState [_] {:expand? true})
+  (render [this]
+    (let [{:keys [expand?]} (om/get-state this)
+          {:keys [selected op ops]} (om/props this)
+          selected? (contains? selected op)]
+      (dom/li #js {:className "file-item"}
+              (dom/span #js {:className (str "clickable "
+                                             (if selected?
+                                               "file-item__text--activated"
+                                               "file-item__text"))
+                             :title (if selected? "Collapse" "Expand")}
+                        (sq/op->sentence op))
+              (when-not (empty? ops)
+                (icon {:title "Expand directory"
+                       :icon-class (str "fa-chevron-down "
+                                        (if expand?
+                                          "expand-icon--active"
+                                          "expand-icon"))}
+                      :click-fn (fn [_]
+                                  ;; expand
+                                  )))
+              (dom/div #js {:className "divider"} nil)
+              (when expand?
+                (operations {:op op :ops ops}))))))
 
 (def operation (om/factory Operation))
 
@@ -310,10 +312,10 @@
 
 (defui Widget
   static om/IQuery
-  (query [_] '[:goal :db0 :db])
+  (query [_] '[:goal :db0 :db :tree])
   Object
   (render [this]
-          (let [{:keys [goal db0 db] :as data} (om/props this)]
+          (let [{:keys [goal db0 db tree] :as data} (om/props this)]
             (dom/div nil
                      (dom/div nil
                               (let [[sq tsq] goal]
@@ -325,11 +327,9 @@
                                                           (om/transact! this '[(square/start)]))}
                                           "Start"))
                      (canvas {:db db})
-                     (let [op (goal->op goal)
-                           db db0]
-                       (when (and (d/db? db) (sq/valid-op? db op))
-                         (let [[op ops] (sq/expand-tree db op)]
-                           (operations {:op op :ops ops}))))))))
+                     (when-not (empty? tree)
+                       (let [[op ops] tree]
+                         (operations {:op op :ops ops})))))))
 
 (def reconciler
   (om/reconciler {:state app-state
