@@ -312,6 +312,8 @@
 ;; ======================================================================
 ;; Advanced planning
 
+;; TODO: define the correct recursive structure of an expanded tree
+
 ;; TODO: get-rid-of could be implemented in terms of move
 (def base-ops #{:move :claw :get-rid-of})
 

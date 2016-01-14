@@ -267,6 +267,8 @@
           {:keys [selected op ops]} (om/props this)
           selected? (contains? selected op)]
       (dom/li #js {:className "file-item"}
+              (println "op" op)
+              (println "ops" ops)
               (dom/span #js {:className (str "clickable "
                                              (if selected?
                                                "file-item__text--activated"
@@ -282,21 +284,23 @@
                        :click-fn (fn [_]
                                    (om/update-state! this update :expand? not))}))
               (dom/div #js {:className "divider"} nil)
-              (when (and expand? (some? op) (not (empty? ops)))
-                (operations {:op op :ops ops}))))))
+              (when (and expand? (not (empty? ops)))
+                (operations {:ops ops}))))))
 
 (def operation (om/factory Operation))
 
 (defui Operations
   om/IQuery
-  (query [_] [:op :ops])
+  (query [_] [:ops])
   Object
   (render [this]
-          (let [{:keys [op ops]} (om/props this)]
+          (let [{:keys [ops]} (om/props this)]
             (apply dom/ul #js {:className "folder-list"}
                    (map (fn [v]
                           (let [[op ops] v]
-                            (operation {:op op :ops ops})))
+                            (when (and (some? op)  (not (empty? ops)))
+                              (println "what" op)
+                              (operation {:op op :ops ops}))))
                         ops)))))
 
 (def operations (om/factory Operations))
@@ -320,7 +324,8 @@
                      (canvas {:db db})
                      (when-not (empty? tree)
                        (let [[op ops] tree]
-                         (operations {:op op :ops ops})))))))
+                         (when-not (empty? ops)
+                           (operations {:ops ops}))))))))
 
 (def reconciler
   (om/reconciler {:state app-state
