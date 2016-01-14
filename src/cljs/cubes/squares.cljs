@@ -361,9 +361,6 @@
 
 (defmulti op->sentence :type)
 
-(defmethod op->sentence :default [op]
-  (str (name (:type op)) " operation"))
-
 (defmethod op->sentence :get-rid-of [{:keys [move]}]
   (str "Get rid of " move))
 

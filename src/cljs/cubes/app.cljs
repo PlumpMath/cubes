@@ -78,7 +78,7 @@
   [{:keys [state] :as env} key params]
   (if-let [[_ value] (find @state key)]
     {:value value}
-    {:value :not-found}))
+    {:value nil}))
 
 (defmulti state->render
   "Takes the state, an op, the current frame,
@@ -249,26 +249,19 @@
 
 (def canvas (om/factory Canvas))
 
-(defui Icon
-  Object
-  (render [this]
-          (let [{:keys [icon-class title click-fn]} (om/props this)]
-            (dom/i #js {:className (str icon-class " fa clickable")
-                        :title title
-                        :onClick (if (fn? click-fn)
-                                   click-fn
-                                   identity)}))))
-
-(def icon (om/factory Icon))
+(defn icon
+  [{:keys [icon-class title click-fn]}]
+  (dom/i #js {:className (str icon-class " fa clickable")
+              :title title
+              :onClick (if (fn? click-fn) click-fn identity)}))
 
 (declare operations)
 
-;; TODO: click-fn
 (defui Operation
   static om/IQuery
   (query [_] '[:selected :op :ops])
   Object
-  (getInitialState [_] {:expand? true})
+  (getInitialState [_] {:expand? false})
   (render [this]
     (let [{:keys [expand?]} (om/get-state this)
           {:keys [selected op ops]} (om/props this)
@@ -285,28 +278,26 @@
                        :icon-class (str "fa-chevron-down "
                                         (if expand?
                                           "expand-icon--active"
-                                          "expand-icon"))}
-                      :click-fn (fn [_]
-                                  ;; expand
-                                  )))
+                                          "expand-icon"))
+                       :click-fn (fn [_]
+                                   (om/update-state! this update :expand? not))}))
               (dom/div #js {:className "divider"} nil)
-              (when expand?
+              (when (and expand? (some? op) (not (empty? ops)))
                 (operations {:op op :ops ops}))))))
 
 (def operation (om/factory Operation))
 
 (defui Operations
+  om/IQuery
+  (query [_] [:op :ops])
   Object
   (render [this]
-   (let [{:keys [op ops]} (om/props this)]
-     (apply dom/ul #js {:className "folder-list"}
-            (map-indexed
-             (fn [i v]
-               (cond
-                 (vector? v) (let [[op ops] v]
-                               (operation {:op op :ops ops}))
-                 :else (operation {:op v :ops []})))
-             ops)))))
+          (let [{:keys [op ops]} (om/props this)]
+            (apply dom/ul #js {:className "folder-list"}
+                   (map (fn [v]
+                          (let [[op ops] v]
+                            (operation {:op op :ops ops})))
+                        ops)))))
 
 (def operations (om/factory Operations))
 
