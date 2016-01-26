@@ -66,13 +66,27 @@
 ;; Render State
 
 (defonce app-state
-  (atom {:db0 nil
-         :plan []
-         :tree []
-         :goal [1 2]
-         :db []
-         :ops []
-         :frame 0}))
+  (let [schema {:supports {:db/cardinality :db.cardinality/many
+                           :db/valueType :db.type/ref}}
+        db (-> (d/empty-db schema)
+               (d/db-with [[:db/add -1 :screen-width (first grid-size)]
+                           [:db/add -1 :screen-height (second grid-size)]])
+               (sq/stack-squares 10))]
+    (atom {:db0 db
+           :plan []
+           :tree []
+           :goal []})))
+
+;; in this watch send to a server that serializes and stores in files
+(defonce watch
+  (add-watch app-state nil (fn [_ _ o n]
+                             (println n))))
+
+(defn init-draw-state [s]
+  {:db (:db0 s) :ops [] :frame 0})
+
+(defonce draw-state
+  (atom (init-draw-state @app-state)))
 
 (defn read
   [{:keys [state] :as env} key params]
@@ -128,8 +142,10 @@
 ;; ======================================================================
 ;; Initialize and Render
 
-(defn reset-state [s]
-  (assoc s :db (:db0 s) :ops (:plan s) :frame 0))
+(defn reset-draw-state!
+  "Takes the app-state and resets the draw-state"
+  [s]
+  (reset! draw-state {:db (:db0 s) :ops (:plan s) :frame 0}))
 
 (defn goal->op [[move to]]
   {:type :put :move move :to to})
@@ -145,23 +161,17 @@
 
 (defn update-plan
   "Updates the plan and static db to the current goal and db"
-  [s]
-  (-> s
-      (assoc :db0 (:db s) :plan (goal->moves (:db s) (:goal s)))
-      (assoc :tree (sq/expand-tree (:db s) (goal->op (:goal s))))
-      reset-state))
+  [s draw-state]
+  (let [draw-db (:db draw-state)]
+    (-> s
+        (assoc :db0 draw-db
+               :plan (goal->moves draw-db (:goal s))
+               :tree (sq/expand-tree draw-db (goal->op (:goal s)))))))
 
 (defn setup! []
   (q/frame-rate frame-rate)
   (q/color-mode :rgb)
-  (q/background 200)
-  (let [schema {:supports {:db/cardinality :db.cardinality/many
-                           :db/valueType :db.type/ref}}
-        db (-> (d/empty-db schema)
-               (d/db-with [[:db/add -1 :screen-width (first grid-size)]
-                           [:db/add -1 :screen-height (second grid-size)]])
-               (sq/stack-squares 10))]
-    (reset! app-state (reset-state {:db0 db :plan [] :goal [] :tree []}))))
+  (q/background 200))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame"
@@ -175,7 +185,7 @@
 
 (defn draw! []
   (clear-canvas!)
-  (let [{:keys [db ops frame]} @app-state
+  (let [{:keys [db ops frame]} @draw-state
         op (first ops)
         {:keys [squares claw]} (state->render db op frame)]
     (doseq [sq squares]
@@ -183,7 +193,7 @@
     (when (and (:x claw) (:y claw))
       (grip! claw))
     (when (some? op)
-      (swap! app-state step-frame))))
+      (swap! draw-state step-frame))))
 
 (defn cubes-sketch! []
   (q/sketch
@@ -217,7 +227,7 @@
     [{:keys [state]} key {:keys [coords]}]
     {:value {:keys [:goal]}
      :action (fn []
-               (swap! state #(if-let [sq (sq/coords->sq (:db %) coords)]
+               (swap! state #(if-let [sq (sq/coords->sq (:db @draw-state) coords)]
                                (assoc-in % [:goal (if (c) 1 0)] sq)
                                %)))}))
 
@@ -229,7 +239,10 @@
 (defmethod mutate `square/start
   [{:keys [state]} key params]
   {:value {:keys [:goal]}
-   :action (fn [] (swap! state update-plan))})
+   :action (fn []
+             (let [s' (update-plan @state @draw-state)]
+               (reset-draw-state! s')
+               (reset! state s')))})
 
 (defui Canvas
   static om/IQuery
@@ -260,7 +273,7 @@
   static om/IQuery
   (query [_] '[:selected :op :ops])
   Object
-  (getInitialState [_] {:expand? false})
+  #_(getInitialState [_] {:expand? false})
   (render [this]
     (let [{:keys [expand?]} (om/get-state this)
           {:keys [selected op ops]} (om/props this)
@@ -306,7 +319,7 @@
   (query [_] '[:goal :db0 :db :tree])
   Object
   (render [this]
-          (let [{:keys [goal db0 db tree] :as data} (om/props this)]
+          (let [{:keys [goal db0 tree] :as data} (om/props this)]
             (dom/div nil
                      (dom/div nil
                               (let [[sq tsq] goal]
@@ -318,7 +331,7 @@
                               (dom/button #js {:onClick (fn [_]
                                                           (om/transact! this '[(square/start)]))}
                                           "Start"))
-                     (canvas {:db db})
+                     (canvas {})
                      (when-not (empty? tree)
                        (let [[op ops] tree]
                          (when-not (empty? ops)
