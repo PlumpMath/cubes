@@ -169,6 +169,7 @@
 (defn find-clear-space
   "Coordinate that has an adjacent clear space (length: width)"
   [db width]
+  {:post [(some? %)]}
   (let [screen-width (first (screen-size db))
         base-sqs (->> db
                       (d/q '[:find (pull ?i [:db/id :side :x])
@@ -186,11 +187,11 @@
 (defmethod op->tx :get-rid-of
   [db {:keys [move]}]
   (let [sq (get-sq db move)]
-    (cond
-      (zero? (:y sq)) []
-      :else (concat (unsupport-tx db move)
-                    [[:db/add move :y 0]
-                     [:db/add move :x (find-clear-space db (:side sq))]]))))
+    (if (zero? (:y sq))
+      []
+      (concat (unsupport-tx db move)
+              [[:db/add move :y 0]
+               [:db/add move :x (find-clear-space db (:side sq))]]))))
 
 (defn apply-op!
   "Returns the squares after the operation is applied"
@@ -299,7 +300,9 @@
     (+ (count (sq-supports db sq)) (count (sq-supports db tsq)))))
 
 (defn plan-moves [goal db]
-  (loop [db db plan [] n 0]
+  (loop [db db
+         plan []
+         n 0]
     (cond
       (done? goal db) plan
       (= 100 n) [:not-found plan]
@@ -384,7 +387,4 @@
   (str "Clear " sq "'s top"))
 
 (defmethod op->sentence :find-space [{:keys [sq]}]
-  (str "Find space for " sq))
-
-(defmethod op->sentence :find-space [{:keys [sq]}]
-  (str "Find space for " sq))
+  (str "Find space on " sq))
