@@ -266,15 +266,13 @@
           {:keys [selected op ops]} (om/props this)
           selected? (contains? selected op)]
       (dom/li #js {:className "file-item"}
-              (println "op" op)
-              (println "ops" ops)
               (dom/span #js {:className (str "clickable "
                                              (if selected?
                                                "file-item__text--activated"
                                                "file-item__text"))
                              :title (if selected? "Collapse" "Expand")}
                         (sq/op->sentence op))
-              (when-not (empty? ops)
+              #_(when-not (empty? ops)
                 (icon {:title "Expand directory"
                        :icon-class (str "fa-chevron-down "
                                         (if expand?
@@ -282,8 +280,8 @@
                                           "expand-icon"))
                        :click-fn (fn [_]
                                    (om/update-state! this update :expand? not))}))
-              (dom/div #js {:className "divider"} nil)
-              (when (and expand? (not (empty? ops)))
+              #_(dom/div #js {:className "divider"} nil)
+              #_(when (and expand? (not (empty? ops)))
                 (operations {:ops ops}))))))
 
 (def operation (om/factory Operation))
@@ -298,7 +296,6 @@
                    (map (fn [v]
                           (let [[op ops] v]
                             (when (and (some? op)  (not (empty? ops)))
-                              (println "what" op)
                               (operation {:op op :ops ops}))))
                         ops)))))
 
@@ -313,7 +310,8 @@
             (dom/div nil
                      (dom/div nil
                               (let [[sq tsq] goal]
-                                (dom/p nil (str "Move " sq " to " tsq)))
+                                (dom/p nil (str "Move " (or sq "_")
+                                                " to " (or tsq "_"))))
                               (dom/button #js {:onClick (fn [_]
                                                           (om/transact! this '[(square/reset)]))}
                                           "Reset")
