@@ -80,7 +80,7 @@
 ;; in this watch send to a server that serializes and stores in files
 #_(defonce watch
     (add-watch app-state nil (fn [_ _ o n]
-                               (println n))))
+                               (println (pr-str n)))))
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})
@@ -347,9 +347,11 @@
                          (when-not (empty? ops)
                            (operations {:ops ops}))))))))
 
+(def parser (om/parser {:read read :mutate mutate}))
+
 (def reconciler
   (om/reconciler {:state app-state
-                  :parser (om/parser {:read read :mutate mutate})}))
+                  :parser parser}))
 
 (defn init []
   (om/add-root! reconciler Widget (. js/document (getElementById "container"))))
