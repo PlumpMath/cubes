@@ -78,9 +78,9 @@
            :goal []})))
 
 ;; in this watch send to a server that serializes and stores in files
-(defonce watch
-  (add-watch app-state nil (fn [_ _ o n]
-                             (println n))))
+#_(defonce watch
+    (add-watch app-state nil (fn [_ _ o n]
+                               (println n))))
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})
@@ -314,6 +314,18 @@
 
 (def operations (om/factory Operations))
 
+(defui GoalDescription
+  static om/IQuery
+  (query [_] '[:goal])
+  Object
+  (render [this]
+          (let [{:keys [goal]} (om/props this)
+                [sq tsq] goal]
+            (dom/p nil (str "Move " (or sq "_")
+                            " to " (or tsq "_"))))))
+
+(def goal-description (om/factory GoalDescription))
+
 (defui Widget
   static om/IQuery
   (query [_] '[:goal :db0 :db :tree])
@@ -322,9 +334,7 @@
           (let [{:keys [goal db0 tree] :as data} (om/props this)]
             (dom/div nil
                      (dom/div nil
-                              (let [[sq tsq] goal]
-                                (dom/p nil (str "Move " (or sq "_")
-                                                " to " (or tsq "_"))))
+                              (goal-description {:goal goal})
                               (dom/button #js {:onClick (fn [_]
                                                           (om/transact! this '[(square/reset)]))}
                                           "Reset")
