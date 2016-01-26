@@ -342,8 +342,10 @@
 (defn base-ops? [ops]
   (every? base-op? ops))
 
-;; FIX: the ops are all expanded with the same db.
-;; use reduce sequentially
+;; FIX: the ops are all expanded with the same db
+;; while each should be expanded on a db with all the changes from
+;; previous changes.
+;; -> use reduce sequentially
 (defn expand-ops [db ops]
   (loop [ops ops]
     (if (base-ops? ops)

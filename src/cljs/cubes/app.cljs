@@ -169,8 +169,7 @@
   (if-let [op (first (:ops s))]
     (if (> 1 (:frame s))
       (assoc s :frame (+ (:frame s) (/ 1 frame-rate)))
-      (cond-> s
-        true (assoc :frame 0 :ops (rest (:ops s)))
+      (cond-> (assoc s :frame 0 :ops (rest (:ops s)))
         (some? op) (update :db #(sq/step-op % op))))
     s))
 
