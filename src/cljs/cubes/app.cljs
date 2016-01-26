@@ -78,9 +78,9 @@
            :goal []})))
 
 ;; in this watch send to a server that serializes and stores in files
-#_(defonce watch
-    (add-watch app-state nil (fn [_ _ o n]
-                               (println (pr-str n)))))
+(defonce watch
+  (add-watch app-state nil (fn [_ _ o n]
+                             (println (pr-str n)))))
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})

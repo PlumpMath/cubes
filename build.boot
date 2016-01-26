@@ -12,14 +12,21 @@
                  [org.clojure/clojurescript "1.7.170"]
                  [org.omcljs/om "1.0.0-alpha22" :exclusions [cljsjs/react]]
                  [datascript "0.13.3"]
-                 [quil "2.3.0"]])
+                 [quil "2.3.0"]
+                 ;; Test
+                 [reloaded.repl "0.2.0"]
+                 [com.stuartsierra/component "0.2.3"]
+                 [ring "1.3.2"]
+                 [compojure "1.4.0"]])
 
 (require
  '[adzerk.boot-cljs      :refer [cljs]]
  '[adzerk.boot-cljs-repl :refer [cljs-repl start-repl]]
  '[adzerk.boot-reload    :refer [reload]]
  '[pandeiro.boot-http    :refer [serve]]
- '[crisptrutski.boot-cljs-test :refer [test-cljs]])
+ '[crisptrutski.boot-cljs-test :refer [test-cljs]]
+ '[reloaded.repl         :refer [go reset start stop system]]
+ '[test.boot             :refer [start-app]])
 
 (deftask build []
   (comp (speak)
@@ -32,7 +39,8 @@
         (watch)
         (cljs-repl)
         (reload)
-        (build)))
+        (build)
+        (start-app :port 3000)))
 
 (deftask testing []
   (set-env! :source-paths #(conj % "test/cljs"))
