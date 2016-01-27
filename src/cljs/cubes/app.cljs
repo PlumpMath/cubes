@@ -285,11 +285,11 @@
     (let [{:keys [expand?]} (om/get-state this)
           {:keys [selected op ops]} (om/props this)
           selected? (contains? selected op)]
-      (dom/li #js {:className "file-item"}
+      (dom/li #js {:className "op-item"}
               (dom/span #js {:className (str "clickable "
                                              (if selected?
-                                               "file-item__text--activated"
-                                               "file-item__text"))
+                                               "op-item__text--activated"
+                                               "op-item__text"))
                              :title (if selected? "Collapse" "Expand")}
                         (sq/op->sentence op))
               #_(when-not (empty? ops)
@@ -312,7 +312,7 @@
   Object
   (render [this]
           (let [{:keys [ops]} (om/props this)]
-            (apply dom/ul #js {:className "folder-list"}
+            (apply dom/ul #js {:className "ops-list"}
                    (map (fn [v]
                           (let [[op ops] v]
                             (when (and (some? op)  (not (empty? ops)))
@@ -320,6 +320,19 @@
                         ops)))))
 
 (def operations (om/factory Operations))
+
+(defui RootOps
+  static om/IQuery
+  (query [_] '[:tree])
+  Object
+  (render [this]
+          (let [{:keys [tree]} (om/props this)]
+            (when-not (empty? tree)
+              (let [[op ops] tree]
+                (when-not (empty? ops)
+                  (operations {:ops ops})))))))
+
+(def root-ops (om/factory RootOps))
 
 (defui GoalDescription
   static om/IQuery
@@ -349,10 +362,7 @@
                                                           (om/transact! this '[(square/start)]))}
                                           "Start"))
                      (canvas {})
-                     (when-not (empty? tree)
-                       (let [[op ops] tree]
-                         (when-not (empty? ops)
-                           (operations {:ops ops}))))))))
+                     (root-ops {:tree tree})))))
 
 (def parser (om/parser {:read read :mutate mutate}))
 
