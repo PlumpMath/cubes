@@ -30,14 +30,11 @@
                         (test-fn)
                         (tu/unmount! c))))
 
-(def test-state
-  (atom
-   (reader/read-string (helper/load-edn "test/resources/predictive/state.edn"))))
-
-(def reconciler
-  (om/reconciler {:state test-state
-                  :parser c/parser}))
 (deftest goal
-  (om/add-root! reconciler c/GoalDescription c)
-  (let [goal-text (.-innerHTML (sel1 c [:p]))]
-    (is (= (map str (:goal @test-state)) (re-seq #"\d+" goal-text)))))
+  (doseq [state (->> (helper/load-edn "test/resources/predictive/states/cubes.edn")
+                     (mapv reader/read-string))]
+    (let [reconciler (om/reconciler {:state (atom state)
+                                     :parser c/parser})]
+      (om/add-root! reconciler c/GoalDescription c)
+      (let [goal-text (.-innerHTML (sel1 c [:p]))]
+        (is (= (map str (:goal state)) (re-seq #"\d+" goal-text)))))))
