@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [com.stuartsierra.component :as component]
             [ring.middleware.params :as params]
+            [ring.middleware.edn :refer [wrap-edn-params]]
             [ring.util.response :as response]
             [ring.middleware.cors :refer [wrap-cors]]
             [ring.adapter.jetty :as jetty]
@@ -16,7 +17,7 @@
 
 (defn ok-response [body]
   {:status 200
-   :headers {"Content-Type" "text/html"}
+   :headers {"Content-Type" "application/edn"}
    :body (pr-str body)})
 
 (defn error-response [error]
@@ -52,7 +53,7 @@
   (let [{:keys [session-id state]} params]
     (try
       (save-state! session-id state)
-      (ok-response {:ok "saved"})
+      (ok-response {:ok state})
       (catch Exception e
         (error-response e)))))
 
@@ -72,15 +73,24 @@
 (defroutes app-routes
   (GET "/" [] (ok-response "<h1>YES</h1>"))
   (GET "/state/:session-id" {:keys [params]} (return-state params))
-  (POST "/state/:session-id" {:keys [params body]}
-        (handle-state! {:session-id (:session-id params)
-                        :state (edn/read-string (slurp body))}))
+  (POST "/state/:session-id" {:keys [params]} (handle-state! params))
   (DELETE "/state/:session-id" {:keys [params]} (handle-delete! params)))
+
+;; FIX: replace with wrap-cors
+(defn add-cors [f]
+  (fn [req]
+    (update (f req)
+            :headers
+            #(merge % {"Access-Control-Allow-Origin" "*"
+                       "Access-Control-Allow-Methods" "POST, GET, OPTIONS"
+                       "Access-Control-Allow-Headers" "Content-Type"}))))
 
 (def app-handler
   (-> app-routes
-      (wrap-cors :access-control-allow-origin [#".*"]
-                 :access-control-allow-methods [:get :put :post :delete])
+      wrap-edn-params
+      add-cors
+      #_(wrap-cors :access-control-allow-origin [#".*"]
+                   :access-control-allow-methods [:get :put :post :delete])
       handler/site))
 
 (defn start-jetty [handler port]

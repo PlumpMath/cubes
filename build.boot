@@ -18,6 +18,7 @@
                  [com.stuartsierra/component "0.2.3"]
                  [ring "1.3.2"]
                  [ring-cors "0.1.7"]
+                 [fogus/ring-edn "0.3.0"]
                  [compojure "1.4.0"]
                  [cljs-ajax "0.3.14"]
                  [clj-http "1.1.0"]
