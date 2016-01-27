@@ -17,7 +17,11 @@
                  [reloaded.repl "0.2.0"]
                  [com.stuartsierra/component "0.2.3"]
                  [ring "1.3.2"]
-                 [compojure "1.4.0"]])
+                 [ring-cors "0.1.7"]
+                 [compojure "1.4.0"]
+                 [cljs-ajax "0.3.14"]
+                 [clj-http "1.1.0"]
+                 ])
 
 (require
  '[adzerk.boot-cljs      :refer [cljs]]
@@ -40,7 +44,7 @@
         (cljs-repl)
         (reload)
         (build)
-        (start-app :port 3000)))
+        (start-app :port 3005)))
 
 (deftask testing []
   (set-env! :source-paths #(conj % "test/cljs"))
