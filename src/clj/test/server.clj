@@ -40,8 +40,8 @@
 (defn get-state [session-id]
   (slurp (session->file session-id)))
 
-(defn delete-state! []
-  (let [f (session->file "uuid")]
+(defn delete-state! [session-id]
+  (let [f (session->file session-id)]
     (when (.exists f)
       (.delete f))))
 
@@ -51,29 +51,31 @@
 (defn handle-state! [params]
   (let [{:keys [session-id state]} params]
     (try
-      (save-state! "uuid" state)
+      (save-state! session-id state)
       (ok-response {:ok "saved"})
       (catch Exception e
         (error-response e)))))
 
 (defn return-state [params]
   (try
-    (ok-response (get-state "uuid" #_(:session-id params)))
+    (ok-response (get-state (:session-id params)))
     (catch Exception e
       (error-response e))))
 
-(defn handle-delete! []
+(defn handle-delete! [{:keys [session-id]}]
   (try
-    (delete-state!)
+    (delete-state! session-id)
     (ok-response {:ok "deleted"})
     (catch Exception e
       (error-response e))))
 
 (defroutes app-routes
   (GET "/" [] (ok-response "<h1>YES</h1>"))
-  (GET "/state" {:keys [body]} (return-state (edn/read-string (slurp body))))
-  (POST "/state" {:keys [body]} (handle-state! (edn/read-string (slurp body))))
-  (DELETE "/state" _ (handle-delete!)))
+  (GET "/state/:session-id" {:keys [params]} (return-state params))
+  (POST "/state/:session-id" {:keys [params body]}
+        (handle-state! {:session-id (:session-id params)
+                        :state (edn/read-string (slurp body))}))
+  (DELETE "/state/:session-id" {:keys [params]} (handle-delete! params)))
 
 (def app-handler
   (-> app-routes
