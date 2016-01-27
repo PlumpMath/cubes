@@ -19,22 +19,18 @@
                         (test-fn)
                         (tu/unmount! c))))
 
-(deftest goal
+(deftest predictive-testing
   (doseq [state (helper/load-states "cubes")]
     (let [reconciler (om/reconciler {:state (atom state)
                                      :parser c/parser})]
-      (testing "The goals is rendered"
-        (om/add-root! reconciler c/GoalDescription c)
-        (let [goal-text (.-innerHTML (sel1 c [:p]))]
-          (is (= (map str (:goal state)) (re-seq #"\d+" goal-text))))))))
 
-(deftest plans
-  (doseq [state (helper/load-states "cubes")]
-    (let [reconciler (om/reconciler {:state (atom state)
-                                     :parser c/parser})]
-      (testing "the Plans are rendered"
-        (om/add-root! reconciler c/RootOps c)
+      (om/add-root! reconciler c/Widget c)
+      (testing "The goal is rendered"
+        (let [goal-text (.-innerHTML (sel1 c [:p]))]
+          (is (= (map str (:goal state)) (re-seq #"\d+" goal-text))
+              "All the blocks in the goal are in the text in order")))
+      (testing "the plan is rendered"
         (let [plan-there? (not (empty? (:plan state)))
               plan-rendered? (some? (sel1 c [:ul.ops-list]))]
           (is (= plan-there? plan-rendered?)
-              "If there is a plan, it should be rendered. No plan, no render"))))))
+              "The plan is rendered only if it is present"))))))
