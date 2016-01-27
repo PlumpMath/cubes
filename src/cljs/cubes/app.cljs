@@ -361,6 +361,7 @@
                               (dom/button #js {:onClick (fn [_]
                                                           (om/transact! this '[(square/start)]))}
                                           "Start"))
+                     (dom/br nil nil)
                      (canvas {})
                      (root-ops {:tree tree})))))
 
