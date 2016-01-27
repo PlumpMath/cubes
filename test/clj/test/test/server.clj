@@ -14,12 +14,19 @@
     (let [test-port 3006
           id "test"
           c (component/start (server/new-system {:port test-port}))
-          state "asdfasdfadsf"]
+          state "a-state-string"
+          state-2 "another-state-string"]
       (is (= 200 (:status (client/delete (->dir test-port "state/test")))))
       (is (= 200 (:status (client/post (->dir 3005 "state/test")
                                        {:form-params {:state state}}))))
-      (is (= state (-> (->dir test-port "state/test")
-                       client/get
-                       :body
-                       edn/read-string)))
+      (is (= [state] (-> (->dir test-port "state/test")
+                         client/get
+                         :body
+                         edn/read-string)))
+      (is (= 200 (:status (client/post (->dir 3005 "state/test")
+                                       {:form-params {:state state-2}}))))
+      (is (= [state state-2] (-> (->dir test-port "state/test")
+                                 client/get
+                                 :body
+                                 edn/read-string)))
       (component/stop c))))

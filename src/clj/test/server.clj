@@ -36,10 +36,14 @@
   (io/file root-dir (str session-id ".edn")))
 
 (defn save-state! [session-id state]
-  (spit (session->file session-id) state :append true))
+  (let [f (session->file session-id)]
+    (if (.exists f)
+      (let [states (edn/read-string (slurp f))]
+        (spit f (conj states state)))
+      (spit f [state]))))
 
 (defn get-state [session-id]
-  (slurp (session->file session-id)))
+  (edn/read-string (slurp (session->file session-id))))
 
 (defn delete-state! [session-id]
   (let [f (session->file session-id)]
