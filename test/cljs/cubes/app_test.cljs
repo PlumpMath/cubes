@@ -24,7 +24,7 @@
                                      :parser c/parser})]
       (om/add-root! reconciler c/Widget c)
       (testing "The goal is rendered"
-        (let [goal-text (.-innerHTML (sel1 c [:p]))]
+        (let [goal-text (.-innerHTML (sel1 c [:p.goal]))]
           (is (= (map str (:goal state)) (re-seq #"\d+" goal-text))
               "All the blocks in the goal are in the text in order")))
       (testing "The plan is rendered"

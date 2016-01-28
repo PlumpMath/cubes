@@ -81,13 +81,15 @@
 (def test-server-url "http://localhost:3005")
 
 ;; in this watch send to a server that serializes and stores in files
-(add-watch app-state nil (fn [_ _ o n]
-                           (POST (str test-server-url "/state/cubes")
-                                 {:params {:state (pr-str n)}
-                                  :format :edn
-                                  :response-format :edn
-                                  :handler (fn [e] (println "All good"))
-                                  :error-handler (fn [e] (println "error" e))})))
+(add-watch app-state nil
+           (fn [_ _ _ new-state]
+             (POST (str test-server-url "/state/cubes")
+                   {:params {:state (pr-str new-state)}
+                    :format :edn
+                    :response-format :edn
+                    :handler (fn [e] (println "State recorded"))
+                    :error-handler (fn [e]
+                                     (println "Recording failed: " e))})))
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})
@@ -341,8 +343,8 @@
   (render [this]
           (let [{:keys [goal]} (om/props this)
                 [sq tsq] goal]
-            (dom/p nil (str "Move " (or sq "_")
-                            " to " (or tsq "_"))))))
+            (dom/p #js {:className "goal"}
+                   (str "Move " (or sq "_") " to " (or tsq "_"))))))
 
 (def goal-description (om/factory GoalDescription))
 
