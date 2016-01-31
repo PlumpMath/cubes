@@ -1,37 +1,26 @@
 (set-env!
  :source-paths    #{"src/cljs" "src/clj"}
  :resource-paths  #{"resources"}
- :dependencies '[[adzerk/boot-cljs          "1.7.170-3"   :scope "test"]
+ :dependencies '[[adzerk/boot-cljs          "1.7.170-3"  :scope "test"]
                  [adzerk/boot-cljs-repl     "0.2.0"      :scope "test"]
                  [adzerk/boot-reload        "0.4.1"      :scope "test"]
                  [pandeiro/boot-http        "0.6.3"      :scope "test"]
                  [crisptrutski/boot-cljs-test "0.2.1-SNAPSHOT" :scope "test"]
                  [cljs-react-test "0.1.3-SNAPSHOT" :scope "test"]
                  [prismatic/dommy "1.0.0" :score "test"]
+;;                  [facilier "0.1.0-SNAPSHOT" :scope "test"]
                  [cljsjs/react-with-addons "0.14.3-0"]
                  [org.clojure/clojurescript "1.7.170"]
                  [org.omcljs/om "1.0.0-alpha22" :exclusions [cljsjs/react]]
                  [datascript "0.13.3"]
-                 [quil "2.3.0"]
-                 ;; Facilier
-                 [reloaded.repl "0.2.0"]
-                 [com.stuartsierra/component "0.2.3"]
-                 [ring "1.3.2"]
-                 [ring-cors "0.1.7"]
-                 [fogus/ring-edn "0.3.0"]
-                 [compojure "1.4.0"]
-                 [cljs-ajax "0.3.14"]
-                 [clj-http "1.1.0"]
-                 ])
+                 [quil "2.3.0"]])
 
 (require
  '[adzerk.boot-cljs      :refer [cljs]]
  '[adzerk.boot-cljs-repl :refer [cljs-repl start-repl]]
  '[adzerk.boot-reload    :refer [reload]]
  '[pandeiro.boot-http    :refer [serve]]
- '[crisptrutski.boot-cljs-test :refer [test-cljs]]
- '[reloaded.repl         :refer [go reset start stop system]]
- '[facilier.boot             :refer [start-app]])
+ '[crisptrutski.boot-cljs-test :refer [test-cljs]])
 
 (deftask build []
   (comp (speak)
@@ -44,8 +33,7 @@
         (watch)
         (cljs-repl)
         (reload)
-        (build)
-        (start-app :port 3005)))
+        (build)))
 
 (deftask testing []
   (set-env! :source-paths #(conj % "test/cljs"))

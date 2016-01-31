@@ -4,7 +4,7 @@
             [quil.core :as q :include-macros true]
             [datascript.core :as d]
             [goog.style :as gstyle]
-            [facilier.client :as f]
+;;            [facilier.client :as f]
             [cubes.squares :as sq]))
 
 (enable-console-print!)
@@ -78,7 +78,7 @@
            :tree []
            :goal []})))
 
-(f/log-states! "cubes" app-state)
+;; (f/log-states! "cubes" app-state)
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})
