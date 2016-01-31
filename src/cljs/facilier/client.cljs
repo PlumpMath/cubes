@@ -1,8 +1,19 @@
 (ns facilier.client
   "Helpers to log states from the client"
-  (:require [ajax.core :refer [GET POST]]))
+  (:require [cljs.reader :as reader]
+            [ajax.core :refer [GET POST]]))
+
 
 (def test-server-url "http://localhost:3005")
+
+(defn get-state [app-name test-fn]
+  (GET (str test-server-url "/state/" app-name)
+       {:format :edn
+        :response-format :edn
+        :handler (fn [e]
+                   (println "State fetch")
+                   (test-fn (mapv reader/read-string e)))
+        :error-handler (fn [e] (println "Recording failed: " e))}))
 
 (defn post-state! [app-name state]
   (POST (str test-server-url "/state/" app-name)
