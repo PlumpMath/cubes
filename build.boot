@@ -13,7 +13,7 @@
                  [org.omcljs/om "1.0.0-alpha22" :exclusions [cljsjs/react]]
                  [datascript "0.13.3"]
                  [quil "2.3.0"]
-                 ;; Test
+                 ;; Facilier
                  [reloaded.repl "0.2.0"]
                  [com.stuartsierra/component "0.2.3"]
                  [ring "1.3.2"]
@@ -31,7 +31,7 @@
  '[pandeiro.boot-http    :refer [serve]]
  '[crisptrutski.boot-cljs-test :refer [test-cljs]]
  '[reloaded.repl         :refer [go reset start stop system]]
- '[test.boot             :refer [start-app]])
+ '[facilier.boot             :refer [start-app]])
 
 (deftask build []
   (comp (speak)

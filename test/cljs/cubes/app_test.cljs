@@ -1,5 +1,5 @@
 (ns cubes.app-test
-  (:require-macros [test.helper :as helper])
+  (:require-macros [facilier.helper :as helper])
   (:require [cljs.test :refer-macros [deftest testing is use-fixtures]]
             [cljs.reader :as reader]
             [cljs-react-test.simulate :as sim]
@@ -24,8 +24,11 @@
                                      :parser c/parser})]
       (om/add-root! reconciler c/Widget c)
       (testing "The goal is rendered"
-        (let [goal-text (.-innerHTML (sel1 c [:p.goal]))]
-          (is (= (map str (:goal state)) (re-seq #"\d+" goal-text))
+        (let [goal (:goal state)
+              goal-text (.-innerHTML (sel1 c [:p.goal]))
+              digits (re-seq #"\d+" goal-text)]
+          (is (or (and (empty? goal) (nil? digits))
+                  (= (map str goal) digits))
               "All the blocks in the goal are in the text in order")))
       (testing "The plan is rendered"
         (let [plan-in-state? (not (empty? (:plan state)))

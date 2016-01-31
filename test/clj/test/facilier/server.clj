@@ -1,10 +1,10 @@
-(ns test.test.server
+(ns test.facilier.server
   (:require [clojure.test :refer :all]
             [clojure.pprint :refer [pprint]]
             [clojure.edn :as edn]
             [clj-http.client :as client]
             [com.stuartsierra.component :as component]
-            [test.server :as server]))
+            [facilier.server :as server]))
 
 (defn ->dir [test-port url]
   (str "http://localhost:" test-port "/" url))

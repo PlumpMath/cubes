@@ -4,7 +4,7 @@
             [quil.core :as q :include-macros true]
             [datascript.core :as d]
             [goog.style :as gstyle]
-            [ajax.core :refer [GET POST]]
+            [facilier.client :as f]
             [cubes.squares :as sq]))
 
 (enable-console-print!)
@@ -78,18 +78,7 @@
            :tree []
            :goal []})))
 
-(def test-server-url "http://localhost:3005")
-
-;; in this watch send to a server that serializes and stores in files
-(add-watch app-state nil
-           (fn [_ _ _ new-state]
-             (POST (str test-server-url "/state/cubes")
-                   {:params {:state (pr-str new-state)}
-                    :format :edn
-                    :response-format :edn
-                    :handler (fn [e] (println "State recorded"))
-                    :error-handler (fn [e]
-                                     (println "Recording failed: " e))})))
+(f/log-states! "cubes" app-state)
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})

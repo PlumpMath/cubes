@@ -1,8 +1,8 @@
-(ns test.boot
+(ns facilier.boot
   {:boot/export-tasks true}
   (:require [boot.core :as b]
             [reloaded.repl :refer [go]]
-            [test.main :refer :all]
+            [facilier.main :refer :all]
             [clojure.tools.namespace.repl :refer [disable-reload!]]))
 
 (disable-reload!)

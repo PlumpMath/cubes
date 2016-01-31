@@ -1,5 +1,5 @@
 (ns cubes.squares-test
-  (:require-macros [test.helper :as helper])
+  (:require-macros [facilier.helper :as helper])
   (:require [cljs.test :refer-macros [deftest testing is use-fixtures]]
             [cljs.reader :as reader]
             [cubes.squares :as sq]))

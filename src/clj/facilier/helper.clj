@@ -1,4 +1,4 @@
-(ns test.helper
+(ns facilier.helper
   "Load edn from files while compiling cljs"
   (:require [clojure.edn :as edn]))
 
