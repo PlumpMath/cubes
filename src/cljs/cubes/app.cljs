@@ -315,24 +315,20 @@
   (render [this]
           (let [{:keys [ops]} (om/props this)]
             (apply dom/ul #js {:className "ops-list"}
-                   (map (fn [v]
-                          (let [[op ops] v]
-                            (when (and (some? op)  (not (empty? ops)))
-                              (operation {:op op :ops ops}))))
+                   (map (fn [op]
+                          (operation {:op op}))
                         ops)))))
 
 (def operations (om/factory Operations))
 
 (defui RootOps
   static om/IQuery
-  (query [_] '[:tree])
+  (query [_] '[:plan])
   Object
   (render [this]
-          (let [{:keys [tree]} (om/props this)]
-            (when-not (empty? tree)
-              (let [[op ops] tree]
-                (when-not (empty? ops)
-                  (operations {:ops ops})))))))
+          (let [{:keys [plan]} (om/props this)]
+            (when-not (empty? plan)
+              (operations {:ops plan})))))
 
 (def root-ops (om/factory RootOps))
 
@@ -350,10 +346,10 @@
 
 (defui Widget
   static om/IQuery
-  (query [_] '[:goal :db0 :db :tree])
+  (query [_] '[:goal :db0 :db :tree :plan])
   Object
   (render [this]
-          (let [{:keys [goal db0 tree] :as data} (om/props this)]
+          (let [{:keys [goal db0 plan] :as data} (om/props this)]
             (dom/div nil
                      (dom/div nil
                               (goal-description {:goal goal})
@@ -365,7 +361,7 @@
                                           "Start"))
                      (dom/br nil nil)
                      (canvas {})
-                     (root-ops {:tree tree})))))
+                     (root-ops {:plan plan})))))
 
 (def parser (om/parser {:read read :mutate mutate}))
 
