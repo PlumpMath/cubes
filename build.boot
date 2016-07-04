@@ -1,18 +1,18 @@
 (set-env!
- :source-paths    #{"src/cljs" "src/clj"}
+ :source-paths    #{"src/cljs"}
  :resource-paths  #{"resources"}
  :dependencies '[[adzerk/boot-cljs          "1.7.170-3"  :scope "test"]
                  [adzerk/boot-cljs-repl     "0.2.0"      :scope "test"]
-                 [adzerk/boot-reload        "0.4.1"      :scope "test"]
+                 [adzerk/boot-reload        "0.4.11"      :scope "test"]
                  [pandeiro/boot-http        "0.6.3"      :scope "test"]
                  [crisptrutski/boot-cljs-test "0.2.1-SNAPSHOT" :scope "test"]
-                 [cljs-react-test "0.1.3-SNAPSHOT" :scope "test"]
+                 [cljs-react-test "0.1.4-SNAPSHOT" :scope "test"]
                  [prismatic/dommy "1.0.0" :score "test"]
 ;;                  [facilier "0.1.0-SNAPSHOT" :scope "test"]
-                 [cljsjs/react-with-addons "0.14.3-0"]
-                 [org.clojure/clojurescript "1.7.170"]
-                 [org.omcljs/om "1.0.0-alpha22" :exclusions [cljsjs/react]]
-                 [datascript "0.13.3"]
+                 [cljsjs/react-with-addons "15.2.0-0"]
+                 [org.clojure/clojurescript "1.9.89"]
+                 [rum "0.10.3"]
+                 [datascript "0.15.0"]
                  [quil "2.3.0"]])
 
 (require
