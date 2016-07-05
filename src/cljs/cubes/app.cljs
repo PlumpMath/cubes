@@ -1,5 +1,5 @@
 (ns cubes.app
-  (:require [rum.core :as rum :refer-macros [defc]]
+  (:require [rum.core :as rum :refer-macros [defc defcs]]
             [quil.core :as q :include-macros true]
             [datascript.core :as d]
             [goog.style :as gstyle]
@@ -241,27 +241,41 @@
                         (when-let [coords (click->coords e)]
                           (raise! [:square/click {:coords coords}])))}])
 
-(defc icon
-  [{:keys [icon-class title click-fn]}]
-  [:i {:class (str icon-class " fa clickable")
-       :title title
-       :on-click (if (fn? click-fn) click-fn identity)}])
+(defc icon < rum/static
+  [{:keys [expanded? click-fn]}]
+  [:a {:on-click (if (fn? click-fn) click-fn identity)}
+   (if expanded?
+     "▾"
+     "►")])
 
-(defc operation [{:keys [expand? selected? op opts]}]
-  [:li.op-item
-   [:span {:class (str "clickable "
-                       (if selected?
-                         "op-item__text--activated"
-                         "op-item__text"))
-           :title (if selected? "Collapse" "Expand")}
-    (sq/op->sentence op)]])
+(declare operations)
+
+(defcs operation < (rum/local {:expanded? false :selected? false} :toggle)
+  [{:keys [toggle]} {:keys [op ops]}]
+  (let [{:keys [expanded? selected?]} @toggle]
+    [:li.op-item
+     [:span {:class (str "clickable "
+                         (if selected?
+                           "op-item__text--activated"
+                           "op-item__text"))
+             :title (if selected? "Collapse" "Expand")}
+      (when-not (empty? ops)
+        (println "ops" ops)
+        (icon {:expanded? expanded?
+               :click-fn (fn [_]
+                           (swap! toggle #(update % :expanded? not)))}))
+      (sq/op->sentence op)
+      [:.divider]
+      (when (and expanded? (not (empty? ops)))
+        (operations ops))]]))
 
 (defc operations < rum/static [ops]
   [:ul.ops-list {}
-   (for [v ops]
-     (let [[op ops] v]
-       (when (and (some? op) (not (empty? ops)))
-         (operation {:op op :ops ops}))))])
+   (for [i (range (count ops))]
+     (let [v (nth ops i)
+           [op ops] v]
+       (when (and (some? op))
+         (rum/with-key (operation {:op op :ops ops}) (str i)))))])
 
 (defn root-ops [tree]
   (when-not (empty? tree)
