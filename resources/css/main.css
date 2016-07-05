@@ -2,3 +2,21 @@
     font-size: 100%;
     list-style: none;
 }
+
+.container {
+    position: relative;
+}
+
+.top {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    padding: 5px;
+}
+
+.top-left {
+    position: absolute;
+    top: 20px;
+    left: 400px;
+    padding: 5px;
+}

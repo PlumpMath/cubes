@@ -253,17 +253,18 @@
 (defc app-view < rum/reactive []
   (let [{:keys [goal db0 tree]} (rum/react app-state)]
     [:div {}
-     [:div {}
-      (goal-description goal)
-      [:button {:on-click (fn [_]
-                            (raise! [:square/reset]))}
-       "Reset"]
-      [:button {:on-click (fn [_]
-                            (raise! [:square/start]))}
-       "Start"]
-      [:br]
-      (svg)
-      (root-ops tree)]]))
+     [:div.container {}
+      [:div.top {}
+       (goal-description goal)
+       [:button {:on-click (fn [_]
+                             (raise! [:square/reset]))}
+        "Reset"]
+       [:button {:on-click (fn [_]
+                             (raise! [:square/start]))}
+        "Start"]]
+      [:div.top-left {}
+       (root-ops tree)]
+      (svg)]]))
 
 (defn init []
   (rum/mount (app-view) (. js/document (getElementById "container"))))
