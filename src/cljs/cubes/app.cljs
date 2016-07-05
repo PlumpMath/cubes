@@ -173,10 +173,8 @@
 (declare operations)
 
 (defc operation [{:keys [op ops]}]
-  (println op ops)
   [:li.op-item
    (sq/op->sentence op)
-   [:.divider]
    (when-not (empty? ops)
      (operations ops))])
 
@@ -239,7 +237,7 @@
        (when (and (:x claw) (:y claw))
          (grip (xy->xy claw)))
        (for [sq squares]
-         (square sq))])))
+         (rum/with-key (square sq) (:db/id sq)))])))
 
 (defc app-view < rum/reactive []
   (let [{:keys [goal db0 tree]} (rum/react app-state)]
