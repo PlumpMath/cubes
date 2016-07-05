@@ -310,11 +310,17 @@
   (let [{:keys [db ops frame]} (rum/react draw-state)
         op (first ops)
         {:keys [squares claw]} (state->render db op frame)]
-    [:svg {:height (first grid-size) :width (second grid-size)}
-     (when (and (:x claw) (:y claw))
-       (grip (xy->xy claw)))
-     (for [sq squares]
-       (square sq))]))
+    (let [[height width] grid-size]
+      [:svg {:height height :width width}
+       [:rect {:height height :width width
+               :style {:fill "white"
+                       :stroke-width "2px"
+                       :border-radius "2px"
+                       :stroke "#888"}}]
+       (when (and (:x claw) (:y claw))
+         (grip (xy->xy claw)))
+       (for [sq squares]
+         (square sq))])))
 
 (defc app-view < rum/reactive []
   (let [{:keys [goal db0 tree]} (rum/react app-state)]
@@ -328,10 +334,8 @@
                             (raise! [:square/start]))}
        "Start"]
       [:br]
-      (canvas {})
-;;      (root-ops tree)
       (svg)
-  ]]))
+      (root-ops tree)]]))
 
 (defn init []
   (rum/mount (app-view) (. js/document (getElementById "container"))))
