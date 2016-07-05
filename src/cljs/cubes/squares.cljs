@@ -85,7 +85,7 @@
 
 (defn sq->center
   [{:keys [x y side]}]
-  [(+ x (/ side 4)) (+ y (/ side 1.5))])
+  [(+ x (/ side 2.4)) (+ y (/ side 1.5))])
 
 (defn ent->map [ent]
   (merge {:db/id (:db/id ent)} ent))
