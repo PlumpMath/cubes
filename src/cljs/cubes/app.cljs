@@ -158,9 +158,6 @@
     (swap! app-state
            #(assoc-in % [:goal (if (c) 1 0)] id))))
 
-(defmethod raise! :square/reset [_]
-  (swap! app-state #(assoc % :db (:db0 %))))
-
 (defmethod raise! :square/start [_]
   (let [s' (update-plan @app-state @draw-state)]
     (reset-draw-state! s')
@@ -208,7 +205,9 @@
         (operations ops)))))
 
 (defc goal-description < rum/static [[sq tsq]]
-  [:p.goal (str "Move " (or sq "_") " to " (or tsq "_"))])
+  [:button {:on-click (fn [_]
+                        (raise! [:square/start]))}
+   (str "Move " (or sq "_") " to " (or tsq "_"))])
 
 (defc square < rum/static [sq]
   (let [sq' (xy->xy sq)
@@ -255,13 +254,7 @@
     [:div {}
      [:div.container {}
       [:div.top {}
-       (goal-description goal)
-       [:button {:on-click (fn [_]
-                             (raise! [:square/reset]))}
-        "Reset"]
-       [:button {:on-click (fn [_]
-                             (raise! [:square/start]))}
-        "Start"]]
+       (goal-description goal)]
       [:div.top-left {}
        (root-ops tree)]
       (svg)]]))
