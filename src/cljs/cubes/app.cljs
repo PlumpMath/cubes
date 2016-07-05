@@ -172,31 +172,23 @@
 
 (declare operations)
 
-(defcs operation < (rum/local {:expanded? false :selected? false} :toggle)
-  [{:keys [toggle]} {:keys [op ops]}]
-  (let [{:keys [expanded? selected?]} @toggle]
-    [:li.op-item
-     [:span {:class (str "clickable "
-                         (if selected?
-                           "op-item__text--activated"
-                           "op-item__text"))
-             :title (if selected? "Collapse" "Expand")}
-      (when-not (empty? ops)
-        (icon {:expanded? expanded?
-               :click-fn (fn [_]
-                           (swap! toggle #(update % :expanded? not)))}))
-      (sq/op->sentence op)
-      [:.divider]
-      (when (and expanded? (not (empty? ops)))
-        (operations ops))]]))
+(defc operation [{:keys [op ops]}]
+  (println op ops)
+  [:li.op-item
+   (sq/op->sentence op)
+   [:.divider]
+   (when-not (empty? ops)
+     (operations ops))])
 
 (defc operations < rum/static [ops]
   [:ul.ops-list {}
    (for [i (range (count ops))]
-     (let [v (nth ops i)
-           [op ops] v]
-       (when (and (some? op))
-         (rum/with-key (operation {:op op :ops ops}) (str i)))))])
+     (let [r (nth ops i)]
+       (if (map? r)
+         (let [base-op r]
+           (rum/with-key (operation {:op base-op :ops []}) (str i)))
+         (let [[op ops] r]
+           (rum/with-key (operation {:op op :ops ops}) (str i))))))])
 
 (defn root-ops [tree]
   (when-not (empty? tree)
