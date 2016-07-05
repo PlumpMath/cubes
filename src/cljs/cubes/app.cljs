@@ -260,7 +260,6 @@
                            "op-item__text"))
              :title (if selected? "Collapse" "Expand")}
       (when-not (empty? ops)
-        (println "ops" ops)
         (icon {:expanded? expanded?
                :click-fn (fn [_]
                            (swap! toggle #(update % :expanded? not)))}))
