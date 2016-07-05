@@ -1,9 +1,7 @@
 (ns cubes.app
   (:require [rum.core :as rum :refer-macros [defc defcs]]
-            [quil.core :as q :include-macros true]
             [datascript.core :as d]
             [goog.style :as gstyle]
-            ;;            [facilier.client :as f]
             [cubes.squares :as sq]
             [clojure.string :as str]))
 
@@ -14,16 +12,10 @@
 
 (def grid-size [600 600])
 
-(def frame-rate 20)
+(def frame-rate 60)
 
 ;; ======================================================================
 ;; Quil Helpers
-
-(defn clear-canvas!
-  "Draws a grey rectangle covering the whole canvas"
-  []
-  (q/fill 192 192 192)
-  (apply q/rect 0 0 grid-size))
 
 (defn xy->xy
   "Coordinate transformation from regular cartesian to screen cartesian:
@@ -33,36 +25,6 @@
 
 ;; In this case the inverse is the same
 (def xy<-xy xy->xy)
-
-(defn sq-text!
-  "Paints text inside the square"
-  [sq]
-  (q/stroke 0 0 0)
-  (q/stroke-weight 0)
-  (q/fill 0 0 0)
-  (let [[x y] (sq/sq->center sq)]
-    (q/text (:db/id sq) x y)))
-
-(defn square!
-  "Draws a square in the screen"
-  [sq]
-  (let [{:keys [x y side rgb] :as sq'} (xy->xy sq)]
-    (apply q/fill rgb)
-    (q/rect x y side side)
-    (sq-text! sq')))
-
-(defn claw!
-  "Draws a claw at x up to y"
-  [x y]
-  (q/fill 0 0 0)
-  (q/rect (- x 10) (- y 5) 25 5)
-  (q/rect x 0 5 y))
-
-(defn grip!
-  "Draws a claw to a square"
-  [sq]
-  (let [{:keys [x y side]} (xy->xy sq)]
-    (claw! (+ x (/ side 2)) y)))
 
 ;; ======================================================================
 ;; Render State
@@ -161,11 +123,6 @@
                :plan (goal->moves draw-db (:goal s))
                :tree (sq/expand-tree draw-db (goal->op (:goal s)))))))
 
-(defn setup! []
-  (q/frame-rate frame-rate)
-  (q/color-mode :rgb)
-  (q/background "#eee"))
-
 (defn step-frame
   "If there are any operations left it steps the state one frame"
   [s]
@@ -175,27 +132,6 @@
       (cond-> (assoc s :frame 0 :ops (rest (:ops s)))
         (some? op) (update :db #(sq/step-op % op))))
     s))
-
-(defn draw! []
-  (clear-canvas!)
-  (let [{:keys [db ops frame]} @draw-state
-        op (first ops)
-        {:keys [squares claw]} (state->render db op frame)]
-    (doseq [sq squares]
-      (square! sq))
-    (when (and (:x claw) (:y claw))
-      (grip! claw))
-    (when (some? op)
-      (swap! draw-state step-frame))))
-
-(defn cubes-sketch! []
-  (q/sketch
-   :title "Oh so many grey circles"
-   :host "canvas"
-   :settings #(q/smooth 2) ;; Turn on anti-aliasing
-   :setup setup!
-   :draw draw!
-   :size grid-size))
 
 ;; ======================================================================
 ;; DOM
@@ -229,14 +165,6 @@
   (let [s' (update-plan @app-state @draw-state)]
     (reset-draw-state! s')
     (reset! app-state s')))
-
-(defc canvas < {:did-mount (fn [_]
-                             (cubes-sketch!)
-                             nil)}
-  [db]
-  [:canvas {:id "canvas"
-            :height 600
-            :width 900}])
 
 (defc icon < rum/static
   [{:keys [expanded? click-fn]}]
