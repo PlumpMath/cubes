@@ -230,8 +230,6 @@
     (reset-draw-state! s')
     (reset! app-state s')))
 
-
-
 (defc canvas < {:did-mount (fn [_]
                              (cubes-sketch!)
                              nil)}
@@ -288,24 +286,25 @@
   (let [sq' (xy->xy sq)
         {:keys [side rgb db/id x y]} sq']
     [:g {:on-click (fn [_]
-                     (raise! [:square/pick {:db/id id}]))}
+                     (raise! [:square/click {:db/id id}]))}
      [:rect {:height side :width side :x x :y y
              :style {:fill (str "rgb(" (str/join "," rgb) ")")}}]
      (let [[x y] (sq/sq->center sq')]
        [:text {:x x :y y} (str id)])]))
 
-(defc claw < rum/static [x y]
-  [:g
-   [:rect {:height 25 :width 5 :x (- x 10) :y (- y 5)
-           :style {:fill "blue"}}]
-   [:rect {:height 0 :width 5 :x x :y y
-           :style {:fill "blue"}}]])
+(def claw-width 10)
 
-(defn grip
-  "Draws a claw to a square"
-  [sq]
-  (let [{:keys [x y side]} (xy->xy sq)]
-    (claw (+ x (/ side 2)) y)))
+(defc grip < rum/static [{:keys [x y side]}]
+  [:g
+   [:rect {:height y :width claw-width
+           :x (- (+ x (/ side 2)) (/ claw-width 2))
+           :y 0
+           :style {:fill "black"}}]
+   [:rect {:height claw-width
+           :width (* 4 claw-width)
+           :x x
+           :y (- y claw-width)
+           :style {:fill "black"}}]])
 
 (defcs svg < rum/reactive []
   (let [{:keys [db ops frame]} (rum/react draw-state)
@@ -313,13 +312,7 @@
         {:keys [squares claw]} (state->render db op frame)]
     [:svg {:height (first grid-size) :width (second grid-size)}
      (when (and (:x claw) (:y claw))
-       (let [{:keys [x y]} claw]
-         [:rect {:height 25 :width 5 :x (- x 10) :y (- y 5)
-                 :style {:fill "blue"}}]))
-     (when (and (:x claw) (:y claw))
-       (let [{:keys [x y]} claw]
-         [:rect {:height 0 :width 5 :x x :y y
-                 :style {:fill "blue"}}]))
+       (grip (xy->xy claw)))
      (for [sq squares]
        (square sq))]))
 
