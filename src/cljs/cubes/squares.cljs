@@ -358,7 +358,10 @@
 (defn expand-tree* [db [op ops]]
   (cond
     (base-ops? ops) [op ops]
-    :else [op (mapv #(expand-tree* db [% (expand-op db %)]) ops)]))
+    :else [op (mapv #(if (base-op? %)
+                       [%]
+                       (expand-tree* db [% (expand-op db %)]))
+                    ops)]))
 
 (defn expand-tree [db op]
   (expand-tree* db [op (expand-op db op)]))
