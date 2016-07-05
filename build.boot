@@ -8,12 +8,10 @@
                  [crisptrutski/boot-cljs-test "0.2.1-SNAPSHOT" :scope "test"]
                  [cljs-react-test "0.1.4-SNAPSHOT" :scope "test"]
                  [prismatic/dommy "1.0.0" :score "test"]
-;;                  [facilier "0.1.0-SNAPSHOT" :scope "test"]
                  [cljsjs/react-with-addons "15.2.0-0"]
                  [org.clojure/clojurescript "1.9.89"]
                  [rum "0.10.3"]
-                 [datascript "0.15.0"]
-                 [quil "2.3.0"]])
+                 [datascript "0.15.0"]])
 
 (require
  '[adzerk.boot-cljs      :refer [cljs]]
