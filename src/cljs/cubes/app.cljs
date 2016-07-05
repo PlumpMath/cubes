@@ -3,8 +3,9 @@
             [quil.core :as q :include-macros true]
             [datascript.core :as d]
             [goog.style :as gstyle]
-;;            [facilier.client :as f]
-            [cubes.squares :as sq]))
+            ;;            [facilier.client :as f]
+            [cubes.squares :as sq]
+            [clojure.string :as str]))
 
 (enable-console-print!)
 
@@ -37,6 +38,7 @@
   "Paints text inside the square"
   [sq]
   (q/stroke 0 0 0)
+  (q/stroke-weight 0)
   (q/fill 0 0 0)
   (let [[x y] (sq/sq->center sq)]
     (q/text (:db/id sq) x y)))
@@ -162,7 +164,7 @@
 (defn setup! []
   (q/frame-rate frame-rate)
   (q/color-mode :rgb)
-  (q/background 200))
+  (q/background "#eee"))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame"
@@ -216,11 +218,9 @@
 
 (let [c (atom true)
       c (fn [] (swap! c not))]
-  (defmethod raise! :square/click [[_ {:keys [coords]}]]
+  (defmethod raise! :square/click [[_ {:keys [db/id]}]]
     (swap! app-state
-           #(if-let [sq (sq/coords->sq (:db @draw-state) coords)]
-              (assoc-in % [:goal (if (c) 1 0)] sq)
-              %))))
+           #(assoc-in % [:goal (if (c) 1 0)] id))))
 
 (defmethod raise! :square/reset [_]
   (swap! app-state #(assoc % :db (:db0 %))))
@@ -230,16 +230,15 @@
     (reset-draw-state! s')
     (reset! app-state s')))
 
+
+
 (defc canvas < {:did-mount (fn [_]
                              (cubes-sketch!)
                              nil)}
   [db]
   [:canvas {:id "canvas"
             :height 600
-            :width 900
-            :on-click (fn [e]
-                        (when-let [coords (click->coords e)]
-                          (raise! [:square/click {:coords coords}])))}])
+            :width 900}])
 
 (defc icon < rum/static
   [{:keys [expanded? click-fn]}]
@@ -285,6 +284,45 @@
 (defc goal-description < rum/static [[sq tsq]]
   [:p.goal (str "Move " (or sq "_") " to " (or tsq "_"))])
 
+(defc square < rum/static [sq]
+  (let [sq' (xy->xy sq)
+        {:keys [side rgb db/id x y]} sq']
+    [:g {:on-click (fn [_]
+                     (raise! [:square/pick {:db/id id}]))}
+     [:rect {:height side :width side :x x :y y
+             :style {:fill (str "rgb(" (str/join "," rgb) ")")}}]
+     (let [[x y] (sq/sq->center sq')]
+       [:text {:x x :y y} (str id)])]))
+
+(defc claw < rum/static [x y]
+  [:g
+   [:rect {:height 25 :width 5 :x (- x 10) :y (- y 5)
+           :style {:fill "blue"}}]
+   [:rect {:height 0 :width 5 :x x :y y
+           :style {:fill "blue"}}]])
+
+(defn grip
+  "Draws a claw to a square"
+  [sq]
+  (let [{:keys [x y side]} (xy->xy sq)]
+    (claw (+ x (/ side 2)) y)))
+
+(defcs svg < rum/reactive []
+  (let [{:keys [db ops frame]} (rum/react draw-state)
+        op (first ops)
+        {:keys [squares claw]} (state->render db op frame)]
+    [:svg {:height (first grid-size) :width (second grid-size)}
+     (when (and (:x claw) (:y claw))
+       (let [{:keys [x y]} claw]
+         [:rect {:height 25 :width 5 :x (- x 10) :y (- y 5)
+                 :style {:fill "blue"}}]))
+     (when (and (:x claw) (:y claw))
+       (let [{:keys [x y]} claw]
+         [:rect {:height 0 :width 5 :x x :y y
+                 :style {:fill "blue"}}]))
+     (for [sq squares]
+       (square sq))]))
+
 (defc app-view < rum/reactive []
   (let [{:keys [goal db0 tree]} (rum/react app-state)]
     [:div {}
@@ -298,7 +336,9 @@
        "Start"]
       [:br]
       (canvas {})
-      (root-ops tree)]]))
+;;      (root-ops tree)
+      (svg)
+  ]]))
 
 (defn init []
   (rum/mount (app-view) (. js/document (getElementById "container"))))
