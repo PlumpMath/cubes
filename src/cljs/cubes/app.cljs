@@ -134,17 +134,6 @@
 ;; ======================================================================
 ;; DOM
 
-(defn click->coords
-  "Finds in which square was the click made (if any)"
-  [e]
-  (letfn [(->xy [ele]
-            (let [c (gstyle/getClientPosition ele)]
-              (map int [(.-x c) (.-y c)])))]
-    (let [[x y] (map - (->xy e) (->xy (.-target e)))
-          {:keys [x y]} (xy<-xy {:x x :y y :side 0})]
-      [x y])))
-
-
 (defmulti raise! (fn [[dispatch _]] dispatch))
 
 (defmethod raise! :default [[action _]]
