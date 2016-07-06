@@ -216,7 +216,7 @@
            :y (- y claw-width)
            :style {:fill "black"}}]])
 
-(defc svg [{:keys [db ops frame]}]
+(defc svg < rum/static [{:keys [db ops frame]}]
   (let [op (first ops)
         {:keys [squares claw]} (state->render db op frame)]
     (let [[height width] grid-size]
