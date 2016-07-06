@@ -27,7 +27,7 @@
 (def xy<-xy xy->xy)
 
 ;; ======================================================================
-;; Render State
+;; State
 
 (defonce app-state
   (let [schema {:supports {:db/cardinality :db.cardinality/many
@@ -93,7 +93,7 @@
             [(last plan)])))
 
 ;; ======================================================================
-;; Initialize and Render
+;; State Transitions
 
 (defn reset-draw-state!
   "Takes the app-state and resets the draw-state"
@@ -103,14 +103,18 @@
 (defn goal->op [[move to]]
   {:type :put :move move :to to})
 
-(defn goal->moves [db goal]
-  (when (apply not= goal)
-    (let [plan (sq/expand-ops db [(goal->op goal)])]
-      (if (sq/valid-plan? db plan)
-        (add-claw-moves plan)
-        (do (println "NOT VALID")
-            (println plan)
-            [])))))
+(defn goal->moves
+  "Expands a goal [from to] into a vector of moves to accomplish them"
+  [db goal]
+  (let [[from to] goal]
+    (when-not (= from to)
+      (let [plan (sq/expand-ops db [(goal->op goal)])]
+        (if (sq/valid-plan? db plan)
+          (add-claw-moves plan)
+          ;; XXX: should throw
+          (do (println "NOT VALID")
+              (println plan)
+              []))))))
 
 (defn update-plan
   "Updates the plan and static db to the current goal and db"
@@ -122,7 +126,7 @@
                :tree (sq/expand-tree draw-db (goal->op (:goal s)))))))
 
 (defn step-frame
-  "If there are any operations left it steps the state one frame"
+  "If there are any operations left it steps the state one frame and returns it"
   [s]
   (if-let [op (first (:ops s))]
     (if (> 1 (:frame s))
@@ -131,13 +135,23 @@
         (some? op) (update :db #(sq/step-op % op))))
     s))
 
+(defn step-draw-state!
+  "Steps the draw-state every 16ms as long as there are operations left"
+  []
+  (let [{:keys [db ops frame]} @draw-state]
+    (when-let [op (first ops)]
+      (swap! draw-state step-frame)
+      (js/setTimeout step-draw-state! 16))))
+
 ;; ======================================================================
-;; DOM
+;; Events
+
+;; All events are raised! and dispatched centrally
 
 (defmulti raise! (fn [[dispatch _]] dispatch))
 
 (defmethod raise! :default [[action _]]
-  (throw (js/Error. (str "handler for " action " not defined"))))
+  (throw (js/Error. (str "Handler for " action " not defined"))))
 
 (let [c (atom true)
       c (fn [] (swap! c not))]
@@ -145,19 +159,14 @@
     (swap! app-state
            #(assoc-in % [:goal (if (c) 1 0)] id))))
 
-;; XXX: should kick off rendering loop
-
-(defn step-draw-state! []
-  (let [{:keys [db ops frame]} @draw-state]
-    (when-let [op (first ops)]
-      (swap! draw-state step-frame)
-      (js/setTimeout step-draw-state! 16))))
-
 (defmethod raise! :square/start [_]
   (let [s' (update-plan @app-state @draw-state)]
     (reset-draw-state! s')
     (reset! app-state s')
     (step-draw-state!)))
+
+;; ======================================================================
+;; UI
 
 (defc icon < rum/static
   [{:keys [expanded? click-fn]}]
