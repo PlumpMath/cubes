@@ -36,16 +36,10 @@
                (d/db-with [[:db/add -1 :screen-width (first grid-size)]
                            [:db/add -1 :screen-height (second grid-size)]])
                (sq/stack-squares 10))]
-    (atom {:db0 db
-           :plan []
+    (atom {:db db
+           :ops []
            :tree []
            :goal []})))
-
-(defn init-draw-state [s]
-  {:db (:db0 s) :ops [] :frame 0})
-
-(defonce draw-state
-  (atom (init-draw-state @app-state)))
 
 (defmulti state->render
   "Takes the state, an op, the current frame,
@@ -95,11 +89,6 @@
 ;; ======================================================================
 ;; State Transitions
 
-(defn reset-draw-state!
-  "Takes the app-state and resets the draw-state"
-  [s]
-  (reset! draw-state {:db (:db0 s) :ops (:plan s) :frame 0}))
-
 (defn goal->op [[move to]]
   {:type :put :move move :to to})
 
@@ -117,13 +106,12 @@
               []))))))
 
 (defn update-plan
-  "Updates the plan and static db to the current goal and db"
-  [s draw-state]
-  (let [draw-db (:db draw-state)]
-    (-> s
-        (assoc :db0 draw-db
-               :plan (goal->moves draw-db (:goal s))
-               :tree (sq/expand-tree draw-db (goal->op (:goal s)))))))
+  "Updates the ops and tree to the new goal"
+  [{:keys [db goal] :as s}]
+  (assoc s
+         :frame 0
+         :ops (goal->moves db goal)
+         :tree (sq/expand-tree db (goal->op goal))))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame and returns it"
@@ -135,13 +123,13 @@
         (some? op) (update :db #(sq/step-op % op))))
     s))
 
-(defn step-draw-state!
-  "Steps the draw-state every 16ms as long as there are operations left"
+(defn step-state!
+  "Steps the app-state every 16ms as long as there are operations left"
   []
-  (let [{:keys [db ops frame]} @draw-state]
+  (let [{:keys [db ops frame]} @app-state]
     (when-let [op (first ops)]
-      (swap! draw-state step-frame)
-      (js/setTimeout step-draw-state! 16))))
+      (swap! app-state step-frame)
+      (js/setTimeout step-state! 16))))
 
 ;; ======================================================================
 ;; Events
@@ -159,11 +147,10 @@
     (swap! app-state
            #(assoc-in % [:goal (if (c) 1 0)] id))))
 
+;; frame to 0
 (defmethod raise! :square/start [_]
-  (let [s' (update-plan @app-state @draw-state)]
-    (reset-draw-state! s')
-    (reset! app-state s')
-    (step-draw-state!)))
+  (swap! app-state update-plan)
+  (step-state!))
 
 ;; ======================================================================
 ;; UI
@@ -228,9 +215,8 @@
            :y (- y claw-width)
            :style {:fill "black"}}]])
 
-(defcs svg < rum/reactive []
-  (let [{:keys [db ops frame]} (rum/react draw-state)
-        op (first ops)
+(defc svg [{:keys [db ops frame]}]
+  (let [op (first ops)
         {:keys [squares claw]} (state->render db op frame)]
     (let [[height width] grid-size]
       [:svg {:height height :width width}
@@ -245,14 +231,14 @@
          (rum/with-key (square sq) (:db/id sq)))])))
 
 (defc app-view < rum/reactive []
-  (let [{:keys [goal db0 tree]} (rum/react app-state)]
+  (let [{:keys [goal tree] :as state} (rum/react app-state)]
     [:div {}
      [:div.container {}
       [:div.top {}
        (goal-description goal)]
       [:div.top-left {}
        (root-ops tree)]
-      (svg)]]))
+      (svg state)]]))
 
 (defn init []
   (rum/mount (app-view) (. js/document (getElementById "container"))))
