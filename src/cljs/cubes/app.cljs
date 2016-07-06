@@ -15,7 +15,7 @@
 (def frame-rate 60)
 
 ;; ======================================================================
-;; Quil Helpers
+;; Geometry Helpers
 
 (defn xy->xy
   "Coordinate transformation from regular cartesian to screen cartesian:
@@ -40,8 +40,6 @@
            :plan []
            :tree []
            :goal []})))
-
-;; (f/log-states! "cubes" app-state)
 
 (defn init-draw-state [s]
   {:db (:db0 s) :ops [] :frame 0})
@@ -158,10 +156,19 @@
     (swap! app-state
            #(assoc-in % [:goal (if (c) 1 0)] id))))
 
+;; XXX: should kick off rendering loop
+
+(defn step-draw-state! []
+  (let [{:keys [db ops frame]} @draw-state]
+    (when-let [op (first ops)]
+      (swap! draw-state step-frame)
+      (js/setTimeout step-draw-state! 16))))
+
 (defmethod raise! :square/start [_]
   (let [s' (update-plan @app-state @draw-state)]
     (reset-draw-state! s')
-    (reset! app-state s')))
+    (reset! app-state s')
+    (step-draw-state!)))
 
 (defc icon < rum/static
   [{:keys [expanded? click-fn]}]
@@ -195,8 +202,8 @@
         (operations ops)))))
 
 (defc goal-description < rum/static [[sq tsq]]
-  [:button {:on-click (fn [_]
-                        (raise! [:square/start]))}
+  [:button.goal-description {:on-click (fn [_]
+                                         (raise! [:square/start]))}
    (str "Move " (or sq "_") " to " (or tsq "_"))])
 
 (defc square < rum/static [sq]
