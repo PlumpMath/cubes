@@ -205,7 +205,8 @@
 
 (defc grip < rum/static [{:keys [x y side]}]
   [:g
-   [:rect {:height y :width claw-width
+   [:rect {:height y
+           :width claw-width
            :x (- (+ x (/ side 2)) (/ claw-width 2))
            :y 0
            :style {:fill "black"}}]
