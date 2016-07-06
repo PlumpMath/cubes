@@ -89,15 +89,12 @@
 ;; ======================================================================
 ;; State Transitions
 
-(defn goal->op [[move to]]
-  {:type :put :move move :to to})
-
 (defn goal->moves
   "Expands a goal [from to] into a vector of moves to accomplish them"
   [db goal]
   (let [[from to] goal]
     (when-not (= from to)
-      (let [plan (sq/expand-ops db [(goal->op goal)])]
+      (let [plan (sq/expand-ops db [(sq/goal->op goal)])]
         (if (sq/valid-plan? db plan)
           (add-claw-moves plan)
           ;; XXX: should throw
@@ -111,7 +108,7 @@
   (assoc s
          :frame 0
          :ops (goal->moves db goal)
-         :tree (sq/expand-tree db (goal->op goal))))
+         :tree (sq/expand-tree db (sq/goal->op goal))))
 
 (defn step-frame
   "If there are any operations left it steps the state one frame and returns it"

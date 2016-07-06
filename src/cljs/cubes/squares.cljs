@@ -51,8 +51,7 @@
 
 ;; http://clj-me.blogspot.com.uy/2009/06/linear-interpolation-and-sorted-map.html
 (defn interpolator
-  "Takes a coll of 2D points (vectors) and returns
-  their linear interpolation function."
+  "Takes a coll of 2D points (vectors) and returns their linear interpolation function."
   [points]
   (let [m (into (sorted-map) points)]
     (fn [x]
@@ -315,8 +314,6 @@
 ;; ======================================================================
 ;; Advanced planning
 
-;; TODO: define the correct recursive structure of an expanded tree
-
 ;; TODO: get-rid-of could be implemented in terms of move
 (def base-ops #{:move :claw :get-rid-of})
 
@@ -365,6 +362,9 @@
 
 (defn expand-tree [db op]
   (expand-tree* db [op (expand-op db op)]))
+
+(defn goal->op [[move to]]
+  {:type :put :move move :to to})
 
 ;; ======================================================================
 ;; Language
